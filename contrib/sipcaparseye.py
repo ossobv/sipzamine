@@ -54,6 +54,22 @@ class SipPacket(Packet):
         return self._method
 
     @property
+    def code(self):
+        if not hasattr(self, '_code'):
+            words = self.data[0].split(' ', 2)
+            if words[0] == 'SIP/2.0':
+                self._code = words[1]
+            else:
+                self._code = None
+        return self._code
+
+    @property
+    def method_and_status(self):
+        if self.code:
+            return '%s(%s)' % (self.method, self.code)
+        return self.method
+
+    @property
     def callid(self):
         if not hasattr(self, '_callid'):
             self._callid = self.get_header('Call-ID', 'i')
@@ -113,7 +129,7 @@ def pcapflat_to_packets(input):
 
         line = input.next()
         m = from_to_re.match(line)
-        assert m
+        assert m, 'Failed to match from_to_re: %r' % (line,)
         from_ = m.groups()[0]
         to = m.groups()[1]
 
@@ -184,13 +200,14 @@ def main(input, filter, show, err):
             else:
                 pointer = ''
                 
-            print packet.time, packet.from_, '>', packet.to, packet.method, pointer
+            print packet.time, packet.from_, '>', packet.to, packet.cseq[0], packet.method_and_status, pointer
         print
 
 
 if __name__ == '__main__':
     import sys
 
+    # Example: tcpdump -nnvs0 -r stored.pcap | sipcaparseye 'm=audio ([0-9]+) '
     if len(sys.argv) not in (2, 3):
         print >>sys.stderr, 'Usage: tcpdump -nnvs0 udp and port 5060 | %s FILTER_RE [SHOW_RE]' % (sys.argv[0],)
         sys.exit(1)
