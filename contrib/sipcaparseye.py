@@ -1,176 +1,28 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai:
-# SIP Pcap Parse Eye (sipcaparseye)
-# Last Change: 2011-11-24 10:05
-import datetime, re
+# SIP Pcap Parse Eye (sipcaparseye) main
+# Copyright (C) Walter Doekes, OSSO B.V. 2011
+
+import re
+
+from libdata import PcapReader, VerboseTcpdumpReader
+from libprotosip import SipPacket # must import file so the type is registered
+
+# FIXME: rename this to: sipzamin (sip examine)
 
 # Matches dialogs and times and looks for certain info (EYE).
 # Takes tcpdump -vs0 udp and port 5060 as input on stdin.
 
 
-class Packet(object):
-    @classmethod
-    def create(self, time_str, from_, to, data):
-        if not data:
-            return Packet(time_str, from_, to, data)
-        word = data[0].split(' ', 1)[0]
-        if word in ('INVITE', 'ACK', 'BYE', 'CANCEL', 'NOTIFY', 'OPTIONS', 'REFER', 'REGISTER',
-                'SUBSCRIBE', 'UPDATE', 'SIP/2.0'): # XXX: not exhaustive..
-            return SipPacket(time_str, from_, to, data)
-        return Packet(time_str, from_, to, data)
-        
-    def __init__(self, time_str, from_, to, data):
-        self.time_str = time_str
-        self.from_ = from_
-        self.to = to
-        self.data = data
-
-    @property
-    def time(self):
-        if not hasattr(self, '_time'):
-            parsed = self.time_str.split(':', 2)
-            parsed2 = parsed[2].split('.')
-            self._time = datetime.time(int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1]))
-        return self._time
-
-    def __repr__(self):
-        summary = 'empty'
-        if self.data:
-            summary = self.data[0][0:12] + '...'
-        return '<Packet(%s, %s, %s, %s)>' % (self.time, self.from_, self.to, summary)
-
-
-class SipPacket(Packet):
-    # FIXME we should technically split __init__(data) into header and
-    # body..
-
-    # Aliases:
-    # f:From
-    # t:To
-    # v:Via
-    # s:Subject
-    # l:Content-Length
-
-    @property
-    def method(self):
-        if not hasattr(self, '_method'):
-            word = self.data[0].split(' ', 1)[0]
-            if word != 'SIP/2.0':
-                self._method = word
-            else:
-                self._method = self.cseq[1]
-        return self._method
-
-    @property
-    def code(self):
-        if not hasattr(self, '_code'):
-            words = self.data[0].split(' ', 2)
-            if words[0] == 'SIP/2.0':
-                self._code = words[1]
-            else:
-                self._code = None
-        return self._code
-
-    @property
-    def method_and_status(self):
-        if self.code:
-            return '%s(%s)' % (self.method, self.code)
-        return self.method
-
-    @property
-    def callid(self):
-        if not hasattr(self, '_callid'):
-            self._callid = self.get_header('Call-ID', 'i')
-        return self._callid
-
-    @property
-    def cseq(self):
-        if not hasattr(self, '_cseq'):
-            data = self.get_header('CSeq')
-            if data:
-                self._cseq = [i.strip() for i in data.split(None, 1)]
-            else:
-                self._cseq = [None, None]
-        return self._cseq
-
-    def get_header(self, header, alt=None):
-        # FIXME doesn't take line-folding into account
-        header = header.lower()
-        if alt:
-            alt = alt.lower()
-        for line in self.data[1:]:
-            # Empty line? done with headers
-            if line.strip() == '':
-                break
-            # Split by colon and match header
-            try:
-                word, rest = line.split(':', 1)
-            except ValueError:
-                print 'fail', line
-                print self.data
-                assert False
-            else:
-                word = word.strip().lower()
-                if word == header or (alt and word == alt):
-                    return rest.strip()
-        return None
-
-    def search(self, re_grep):
-        for line in self.data:
-            m = re_grep.search(line)
-            if m:
-                return m
-        return None
-
-
-def pcapflat_to_packets(input):
-    time_re = re.compile('^(\d{2}:\d{2}:\d{2}\.(\d+)).*$')
-    from_to_re = re.compile('^    ([0-9.]+) > ([0-9.]+).*$')
-
-    line = input.next()
-
-    done = False
-    while not done:
-        m = time_re.match(line)
-        assert m
-        time = m.groups()[0]
-
-        line = input.next()
-        m = from_to_re.match(line)
-        assert m, 'Failed to match from_to_re: %r' % (line,)
-        from_ = m.groups()[0]
-        to = m.groups()[1]
-
-        # get all until eof or next packet
-        data = []
-        while not done:
-            try:
-                line = input.next()
-            except StopIteration:
-                done = True
-                break
-            if time_re.match(line):
-                break
-            else:
-                data.append(line)
-        # last line should contain TAB only
-        if data and data[-1] == '\t\n':
-            data.pop()
-
-        # remove trailing LFs (CR was already removed by tcpdump -v
-        data = [i[1:-1] for i in data]
-
-        if data:
-            yield Packet.create(time, from_, to, data)
-
-
-def timediff(t0, t1):
-    seconds0 = t0.hour * 3600 + t0.minute * 60 + t0.second + t0.microsecond / 1000000.0
-    seconds1 = t1.hour * 3600 + t1.minute * 60 + t1.second + t1.microsecond / 1000000.0
-    return seconds1 - seconds0
+#def timediff(t0, t1):
+#    seconds0 = t0.hour * 3600 + t0.minute * 60 + t0.second + t0.microsecond / 1000000.0
+#    seconds1 = t1.hour * 3600 + t1.minute * 60 + t1.second + t1.microsecond / 1000000.0
+#    return seconds1 - seconds0
     
 
-def main(input, filter, show, err):
+def main(reader, filter, show, err):
+    # FIXME: use lots of nice options!
+
     # Use filter as show if show isn't supplied
     re_filter = re.compile(filter)
     re_show = re_filter
@@ -181,7 +33,8 @@ def main(input, filter, show, err):
     # which spits out dialogs as soon as they're finished
     # (BYE/CANCEL/4xx))
     dialogs = {}
-    for packet in pcapflat_to_packets(input):
+    for packet in reader:
+        print packet
         if isinstance(packet, SipPacket):
             if packet.callid not in dialogs:
                 dialogs[packet.callid] = []
@@ -227,19 +80,24 @@ if __name__ == '__main__':
     import sys
 
     # Example: tcpdump -nnvs0 -r stored.pcap | sipcaparseye 'm=audio ([0-9]+) '
-    if len(sys.argv) not in (2, 3):
-        print >>sys.stderr, 'Usage: tcpdump -nnvs0 udp and port 5060 | %s FILTER_RE [SHOW_RE]' % (sys.argv[0],)
+    if len(sys.argv) not in (3, 4):
+        print >>sys.stderr, 'Usage: tcpdump -nnvs0 udp and port 5060 | %s - FILTER_RE [SHOW_RE]' % (sys.argv[0],)
         sys.exit(1)
 
-    main(sys.stdin, sys.argv[1], ''.join(sys.argv[2:3]), err=sys.stderr)
+    if sys.argv[1] == '-':
+        reader = VerboseTcpdumpReader(sys.stdin)
+    else:
+        reader = PcapReader(sys.argv[1])
+
+    main(reader, sys.argv[2], ''.join(sys.argv[3:4]), err=sys.stderr)
 
     # Example usage:
     #
-    # # tcpdump -nnvs0 -r stored.pcap | sipcaparseye 'm=audio ([0-9]+) '
+    # # tcpdump -nnvs0 -r stored.pcap | sipcaparseye - 'm=audio ([0-9]+) '
     #
     # Example usage and output:
     #
-    # # for x in 5060.pcap.*; do tcpdump -vls0 -nnr $x; done 2>/dev/null | ./sipcaparseye.py '555338143' 'm=audio (\d+)'
+    # # for x in 5060.pcap.*; do tcpdump -vls0 -nnr $x; done 2>/dev/null | ./sipcaparseye.py - '555338143' 'm=audio (\d+)'
     #
     # [ 100a2fae3cef080c2131ad43520aa864@217.21.192.80 ]
     # 13:55:58.436505 217.21.192.80.5060 > 217.21.192.81.5060 INVITE <-- 18494
