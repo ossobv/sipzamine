@@ -16,14 +16,19 @@ class VerboseTcpdumpReader(object):
     '''
     Reads formatted verbose tcpdump output (-nnvls0).
     '''
-    def __init__(self, file, date=None):
+    def __init__(self, file, bogus_date=None, min_date=None, max_date=None):
         self.input = file
         self.line = None
 
         self.time_re = re.compile('^(\d{2}:\d{2}:\d{2}\.(\d+)).*$')
         self.from_to_re = re.compile('^    ([0-9.]+) > ([0-9.]+).*$')
-        self.date = date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
+        self.bogus_date = bogus_date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
         # FIXME increase the date when time wraps in next() iterator!
+
+        self.min_date = min_date
+        self.max_date = max_date
+        if min_date or max_date:
+            raise NotImplementedError() # convert date to datetime and filter those?
 
     def __iter__(self):
         return self
@@ -56,24 +61,32 @@ class VerboseTcpdumpReader(object):
             #self.input.close()
             self.input = None
 
-        # last line should contain TAB only, but sometimes it doesn't
-        if data and data[-1] == '\n':
-            data.pop()
-
         # Parse time
         parsed = time.split(':', 2)
         parsed2 = parsed[2].split('.')
-        time = datetime.datetime(self.date.year, self.date.month, self.date.day, int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1]))
+        time = datetime.datetime(
+            self.bogus_date.year, self.bogus_date.month, self.bogus_date.day,
+            int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1])
+        )
+
+        # Check time against our filters
+        # TODO
+
+        # Last line should contain TAB only, but sometimes it doesn't
+        if data and data[-1] == '\n':
+            data.pop()
+
         # Parse from_/to
         from_ = from_.rsplit('.', 1)
         from_ = (from_[0], int(from_[1]))
         to = to.rsplit('.', 1)
         to = (to[0], int(to[1]))
+
         # Select protocol
-        ip_proto = 'UDP' # tcodump verbose mode lists TCP data completely differently
+        ip_proto = 'UDP' # tcpdump verbose mode lists TCP data completely differently
+
         # (CRs are removed by tcpdump -v, data is now LF separated)
         return IpPacket.create(time, ip_proto, from_, to, ''.join(data))
-
 
 
 class PcapReader(object):
@@ -86,7 +99,7 @@ class PcapReader(object):
         socket.IPPROTO_ICMP: 'ICMP'
     }
 
-    def __init__(self, filenames, pcap_filter=None):
+    def __init__(self, filenames, pcap_filter=None, min_date=None, max_date=None):
         if not pcap:
             raise ImportError('PcapReader requires pylibpcap support (python-libpcap)')
 
@@ -94,6 +107,9 @@ class PcapReader(object):
         self.pcap.open_offline(*filenames)
         if pcap_filter:
             self.pcap.setfilter(pcap_filter, 0, 0)
+
+        self.min_date = min_date
+        self.max_date = max_date
 
     def __iter__(self):
         return self
@@ -105,6 +121,11 @@ class PcapReader(object):
             except TypeError:
                 # Nonetype is not iterable
                 raise StopIteration
+
+            if self.min_date and timestamp < self.min_date:
+                continue
+            if self.max_date and timestamp > self.max_date:
+                continue
 
             # Ethernet => IP
             if data[12:14] != '\x08\x00':

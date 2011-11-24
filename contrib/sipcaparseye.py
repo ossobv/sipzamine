@@ -3,89 +3,120 @@
 # SIP Pcap Parse Eye (sipcaparseye) main
 # Copyright (C) Walter Doekes, OSSO B.V. 2011
 
-import re
-
 from libdata import PcapReader, VerboseTcpdumpReader
 from libprotosip import SipDialogs # must import file so the type is registered
 
 # FIXME: rename this to: sipzamin (sip examine)
-
 # TODO: the verbosereader should add CR's back.. now that we have the libpcapreader it should be deprecated too..
 
 # Matches dialogs and times and looks for certain info (EYE).
 # Takes tcpdump -vs0 udp and port 5060 as input on stdin.
 
 
-def main(reader, filter, show, err):
-    # FIXME: use lots of nice options!
+def main(reader, packet_match=None, packet_highlight=None, min_duration=None, max_duration=None):
+    # Use packet_match as packet_highlight if show isn't supplied
+    if not packet_highlight:
+        packet_highlight = packet_match
 
-    # Use filter as show if show isn't supplied
-    re_filter = re.compile(filter)
-    re_show = re_filter
-    if show:
-        re_show = re.compile(show)
-
-    # Loop over dialogs, keeping those which match
+    # Loop over dialogs, keeping those that match
     matching_dialogs = []
     for dialog in SipDialogs(reader):
-        for packet in dialog:
-#            # HACKS!
-#            if (dialog[-1].datetime - dialog[0].time) > 2.0:
-#                continue
-#            if not dialog[0].from_[0].startswith('62'):
-#                continue
-            if packet.search(re_filter):
-                matching_dialogs.append(dialog)
-                break
+        # Filter against duration
+        if min_duration or max_duration:
+            duration = dialog[-1].datetime - dialog[0].datetime
+            if min_duration and duration < min_duration:
+                continue
+            if max_duration and duration > max_duration:
+                continue
+        
+        # Match dialogs by packet
+        if packet_match:
+            for packet in dialog:
+#                # HACKS!
+#                if not dialog[0].from_[0].startswith('62'):
+#                    continue
+                if packet.search(packet_match):
+                    matching_dialogs.append(dialog)
+                    break
+        else:
+            matching_dialogs.append(dialog)
 
     # Order dialogs by begin-time
     matching_dialogs.sort(key=lambda x: x[0].datetime)
 
-    # Print the matching dialogs and show matches
+    # Print the matching dialogs and packet_highlight matches
     for dialog in matching_dialogs:
         print '[', dialog[0].callid, ']'
         for packet in dialog:
-            found_here = packet.search(re_show)
-            if found_here:
-                if not found_here.groups():
-                    pointer = '<--'
-                else:
-                    pointer = '<-- %s' % (found_here.groups()[0],)
-            else:
-                pointer = ''
+            highlight = ''
+            if packet_highlight:
+                found_here = packet.search(packet_highlight)
+                if found_here:
+                    if not found_here.groups():
+                        highlight = '<--'
+                    else:
+                        highlight = '<-- %s' % (found_here.groups()[0],)
                 
-            print packet.datetime, ':'.join(str(i) for i in packet.from_), '>', ':'.join(str(i) for i in packet.to), packet.cseq[0], packet.method_and_status, pointer
+            print '%s %s:%d > %s:%d %s %s %s' % (
+                packet.datetime, packet.from_[0], packet.from_[1], packet.to[0], packet.to[1],
+                packet.cseq[0], packet.method_and_status, highlight
+            )
         print
 
 
 if __name__ == '__main__':
-    import sys
+    import datetime, re, sys, time
     try:
         import argparse
     except ImportError:
         import argparse_1_2_1 as argparse
 
+    def my_regex(regexstring):
+        try:
+            return re.compile(regexstring)
+        except:
+            raise ValueError()
+    def my_strptime(timestring):
+        return time.mktime(time.strptime(timestring, '%Y-%m-%d %H:%M:%S'))
+    def my_timedelta(floatstring):
+        num = [0] + [int(i) for i in floatstring.split('.', 1)]
+        if sum(num) == 0:
+            raise ValueError('Now I cannot boolean test your value')
+        return datetime.timedelta(*num)
+
     # Example: sipcaparseye -m '^INVITE' -H 'm=audio ([0-9]+)' -p 'host 1.2.3.4' 5060.pcap.00
 
     parser = argparse.ArgumentParser(description='Search and examine SIP transactions/dialogs')
+
     parser.add_argument('files', metavar='PCAP', nargs='+',
             help='pcap files to parse, or - to read tcpdump -nnvs0 output from stdin')
     parser.add_argument('--pcap', '-p', metavar='filter',
             help='pcap filter expression')
-    parser.add_argument('--pmatch', '-m', metavar='regex',
+
+    parser.add_argument('--pmatch', '-m', metavar='regex', type=my_regex,
             help='packet in dialog must match regex')
-    parser.add_argument('--highlight', '-H', metavar='regex',
+    parser.add_argument('--highlight', '-H', metavar='regex', type=my_regex,
             help='highlight first matchgroup in packets')
+
+    parser.add_argument('--mindate', metavar='date', type=my_strptime,
+            help='packets must be younger than specified date')
+    parser.add_argument('--maxdate', metavar='date', type=my_strptime,
+            help='packets must be older than specified date')
+
+    parser.add_argument('--mindur', metavar='seconds', type=my_timedelta,
+            help='dialogs/transactions must be shorter than duration')
+    parser.add_argument('--maxdur', metavar='seconds', type=my_timedelta,
+            help='dialogs/transactions must be longer than duration')
 
     args = parser.parse_args()
     if len(args.files) == 1 and args.files[0] == '-':
         if args.pcap:
             parser.error('Cannot use pcap filter with stdin mode')
-        reader = VerboseTcpdumpReader(sys.stdin)
+        reader = VerboseTcpdumpReader(sys.stdin, min_date=args.mindate, max_date=args.maxdate)
     else:
-        reader = PcapReader(args.files, args.pcap)
+        reader = PcapReader(args.files, pcap_filter=args.pcap, min_date=args.mindate, max_date=args.maxdate)
         
-    main(reader, sys.argv[2], ''.join(sys.argv[3:4]), err=sys.stderr)
+    main(reader, packet_match=args.pmatch, packet_highlight=args.highlight, min_duration=args.mindur, max_duration=args.maxdur)
 
     # Example usage:
     #
