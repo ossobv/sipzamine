@@ -79,6 +79,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     if len(args.files) == 1 and args.files[0] == '-':
+        if args.pcap:
+            parser.error('Cannot use pcap filter with stdin mode')
         reader = VerboseTcpdumpReader(sys.stdin)
     else:
         reader = PcapReader(args.files, args.pcap)
