@@ -1,6 +1,7 @@
 # vim: set ts=8 sw=4 sts=4 et ai:
-# sipcaparseye Packet lib
+# sipcaparseye Base Protocol lib
 # Copyright (C) Walter Doekes, OSSO B.V. 2011
+
 import datetime
 
 

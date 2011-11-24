@@ -10,6 +10,8 @@ from libprotosip import SipDialogs # must import file so the type is registered
 
 # FIXME: rename this to: sipzamin (sip examine)
 
+# TODO: the verbosereader should add CR's back.. now that we have the libpcapreader it should be deprecated too..
+
 # Matches dialogs and times and looks for certain info (EYE).
 # Takes tcpdump -vs0 udp and port 5060 as input on stdin.
 
@@ -52,7 +54,7 @@ def main(reader, filter, show, err):
             else:
                 pointer = ''
                 
-            print packet.datetime, ':'.join(packet.from_), '>', ':'.join(packet.to), packet.cseq[0], packet.method_and_status, pointer
+            print packet.datetime, ':'.join(str(i) for i in packet.from_), '>', ':'.join(str(i) for i in packet.to), packet.cseq[0], packet.method_and_status, pointer
         print
 
 
@@ -67,7 +69,7 @@ if __name__ == '__main__':
     if sys.argv[1] == '-':
         reader = VerboseTcpdumpReader(sys.stdin)
     else:
-        reader = PcapReader(sys.argv[1])
+        reader = PcapReader([sys.argv[1]])
 
     main(reader, sys.argv[2], ''.join(sys.argv[3:4]), err=sys.stderr)
 

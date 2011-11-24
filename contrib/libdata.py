@@ -1,5 +1,8 @@
 # vim: set ts=8 sw=4 sts=4 et ai:
-import datetime, re
+# sipcaparseye Data source lib
+# Copyright (C) Walter Doekes, OSSO B.V. 2011
+
+import datetime, re, socket, struct
 try:
     import pcap # python-libpcap
 except ImportError:
@@ -62,8 +65,10 @@ class VerboseTcpdumpReader(object):
         parsed2 = parsed[2].split('.')
         time = datetime.datetime(self.date.year, self.date.month, self.date.day, int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1]))
         # Parse from_/to
-        from_ = tuple(from_.rsplit('.', 1))
-        to = tuple(to.rsplit('.', 1))
+        from_ = from_.rsplit('.', 1)
+        from_ = (from_[0], int(from_[1]))
+        to = to.rsplit('.', 1)
+        to = (to[0], int(to[1]))
         # Select protocol
         ip_proto = 'UDP' # tcodump verbose mode lists TCP data completely differently
         # (CRs are removed by tcpdump -v, data is now LF separated)
@@ -75,9 +80,66 @@ class PcapReader(object):
     '''
     Reads a pcap file.
     '''
-    def __init__(self, file):
-        raise NotImplementedError()
+    protocols = {
+        socket.IPPROTO_TCP: 'TCP',
+        socket.IPPROTO_UDP: 'UDP',
+        socket.IPPROTO_ICMP: 'ICMP'
+    }
 
+    def __init__(self, filenames):
+        if not pcap:
+            raise ImportError('PcapReader requires pylibpcap support (python-libpcap)')
+
+        self.pcap = pcap.pcapObject()
+        self.pcap.open_offline(*filenames)
+        # OPTIONALLY: p.setfilter(string.join(sys.argv[2:],' '), 0, 0)
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        while True:
+            try:
+                (pktlen, data, timestamp) = self.pcap.next()
+            except TypeError:
+                # Nonetype is not iterable
+                raise StopIteration
+
+            # Ethernet => IP
+            if data[12:14] != '\x08\x00':
+                continue
+            data = data[14:]
+
+            version = (ord(data[0]) & 0xf0) >> 4
+            header_len = ord(data[0]) & 0x0f
+            if version != 4:
+                # IPv6 is *not* supported ATM
+                continue
+
+            ip_proto = self.protocols[ord(data[9])]
+            from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
+            to = pcap.ntoa(struct.unpack('i', data[16:20])[0])
+
+            # IP => TCP/UDP/ICMP
+            data = data[4 * header_len:]
+
+            if ip_proto in ('TCP', 'UDP'):
+                from_ = (from_, struct.unpack('>H', data[0:2])[0])
+                to = (to, struct.unpack('>H', data[2:4])[0])
+
+                if ip_proto == 'TCP':
+                    data_offset = (ord(data[12]) & 0xf) * 4 + 20
+                    data = data[data_offset:]
+
+                else:
+                    data = data[8:]
+
+            else:
+                assert False, 'No support for ICMP'
+
+            datetime_ = datetime.datetime.fromtimestamp(timestamp)
+            return IpPacket.create(datetime_, ip_proto, from_, to, data)
+        
 
 def test_verbosetcpdumpreader():
     from StringIO import StringIO
