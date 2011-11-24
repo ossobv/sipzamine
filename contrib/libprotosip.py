@@ -1,6 +1,9 @@
 # vim: set ts=8 sw=4 sts=4 et ai:
 # sipzamin SIP Protocol lib
 # Copyright (C) Walter Doekes, OSSO B.V. 2011
+
+from collections import defaultdict
+
 from libproto import IpPacket
 
 
@@ -36,7 +39,7 @@ class SipPacket(IpPacket):
         if not hasattr(self, '_code'):
             words = self.headers[0].split(' ', 2)
             if words[0] == 'SIP/2.0':
-                self._code = words[1]
+                self._code = int(words[1])
             else:
                 self._code = None
         return self._code
@@ -76,9 +79,7 @@ class SipPacket(IpPacket):
             try:
                 word, rest = line.split(':', 1)
             except ValueError:
-                print 'fail', line
-                print self.headers
-                assert False
+                raise # FIXME
             else:
                 word = word.strip().lower()
                 if word == header or (alt and word == alt):
@@ -93,6 +94,103 @@ class SipPacket(IpPacket):
         return None
 
 IpPacket.register_subtype(SipPacket)
+
+
+class SipDialog(list):
+    '''
+    Container for a list of packets belonging to the same dialog
+    '''
+    def append(self, item):
+        super(SipDialog, self).append(item)
+        if hasattr(self, '_is_established'):
+            del self._is_established
+
+    def is_established(self):
+        if not hasattr(self, '_is_established'):
+            cseqs_200 = []
+            for i in self[1:]:
+                if i.code == 200:
+                    cseqs_200.append(i.cseq[0])
+                elif i.method == 'ACK' and i.cseq[0] in cseqs_200:
+                    self._is_established = True
+                    break
+            else:
+                self._is_established = False
+        return self._is_established
+
+
+class SipDialogs(object):
+    '''
+    Read from a packet generator and yield SIP dialogs.
+    '''
+    def __init__(self, packet_generator):
+        self.input = packet_generator
+        self.dialogs = defaultdict(SipDialog)
+        self.latest_datetime = None
+        self.yieldable = []
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        # Is there anything left to yield
+        if self.yieldable:
+            return self.yieldable.pop(0)
+            
+        # Are we done?
+        if not self.input:
+            raise StopIteration
+
+        # Fetch more packets
+        try:
+            while True:
+                packet = self.input.next()
+                if isinstance(packet, SipPacket):
+                    self.dialogs[packet.callid].append(packet)
+
+                # Check if there is anything we can yield already based
+                # on the latest timestamp (dialogs that are old enough
+                # to end).
+                if not self.latest_datetime or (packet.datetime - self.latest_datetime).seconds > 300:
+                    self.update_yieldable(packet.datetime)
+                    self.latest_datetime = packet.datetime
+                    if self.yieldable:
+                        return self.yieldable.pop(0)
+
+        except StopIteration:
+            # Time to yield everything we have
+            self.yieldable = self.dialogs.values()
+            self.yieldable.sort(key=(lambda x: x[0].datetime))
+            self.dialogs.clear()
+            #self.input.close()
+            self.input = None
+
+        # Return the yieldables or raise StopIteration
+        return self.next()
+
+    def update_yieldable(self, latest_datetime):
+        # Loop over dialogs, all non-INVITEs shan't be more than 120
+        # seconds old. INVITEs may be older, but only if established.
+        for k, v in self.dialogs.items():
+            yield_it = False
+
+            if (latest_datetime - v[-1].datetime).seconds > 120:
+                if v[0].method != 'INVITE':
+                    yield_it = True
+
+                elif len(v) == 1 or v[-1].code: # only the invite, or any response but no ACK?
+                    yield_it = True
+
+                elif not v.is_established() and v[-1].method == 'ACK' and v[-2].code >= 300: # fail and end
+                    yield_it = True
+
+                elif v.is_established() and v[-1].method == 'BYE' and v[-1].code == 200:
+                    yield_it = True
+
+                # Yield it?
+                if yield_it:
+                    self.yieldable.append(v)
+                    del self.dialogs[k]
 
 
 if __name__ == '__main__':

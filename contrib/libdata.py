@@ -82,7 +82,7 @@ class PcapReader(object):
 def test_verbosetcpdumpreader():
     from StringIO import StringIO
     from libprotosip import SipPacket
-    data = '''22:24:58.461807 IP (tos 0x68, ttl 55, id 0, offset 0, flags [DF], proto UDP (17), length 712)
+    regdata = '''22:24:58.461807 IP (tos 0x68, ttl 55, id 0, offset 0, flags [DF], proto UDP (17), length 712)
     11.22.33.44.5566 > 22.22.22.22.5060: SIP, length: 684
 \tREGISTER sip:sip.example.com SIP/2.0
 \tVia: SIP/2.0/UDP 11.22.33.44:5566;branch=z9hG4bK-53a7e057
@@ -100,12 +100,31 @@ def test_verbosetcpdumpreader():
 \t
 \t
 '''
-    reader = VerboseTcpdumpReader(StringIO(data + data))
+    byedata = '''22:37:08.388039 IP (tos 0x10, ttl 62, id 0, offset 0, flags [DF], proto UDP (17), length 628)
+    33.33.33.33.5060 > 22.22.22.22.5060: SIP, length: 600
+\tBYE sip:%2b31612345678@22.22.22.22 SIP/2.0
+\tRecord-Route: <sip:44.44.44.44;lr>
+\tVia: SIP/2.0/UDP 33.33.33.33;branch=z9hG4bKdc31.4e175d83.0
+\tVia: SIP/2.0/UDP 44.44.44.44;branch=z9hG4bKdc31.2dae36b2.0
+\tVia: SIP/2.0/UDP 44.44.44.45:5062;branch=z9hG4bKtn45io207oohomslv641.1
+\tFrom: <sip:+31612345678@44.44.44.45>;tag=4ECD6615-E26C91F-3E86ED92
+\tTo: "+31612345678" <sip:+31297386600@44.44.44.44>;tag=as283cd428
+\tCall-ID: 1636439003d8d16a5fd4704864096e74@22.22.22.22
+\tCSeq: 1 BYE
+\tSupported: timer
+\tMax-Forwards: 27
+\tReason: Q.850 ;cause=16 ;text="Normal call clearing"
+\tContent-Length: 0
+\t
+\t
+'''
+        
+    reader = VerboseTcpdumpReader(StringIO(regdata + regdata + byedata))
     for i, packet in enumerate(reader):
         if not isinstance(packet, SipPacket):
             raise RuntimeError('Expected a SipPacket')
-    if i != 1:
-        raise RuntimeError('Expected exactly two results')
+    if i != 2:
+        raise RuntimeError('Expected exactly three results')
 
 
 if __name__ == '__main__':
