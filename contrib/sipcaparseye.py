@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai:
 # SIP Pcap Parse Eye (sipcaparseye)
-# Last Change: 2011-10-21 15:44
-import re
+# Last Change: 2011-11-24 10:05
+import datetime, re
 
 # Matches dialogs and times and looks for certain info (EYE).
 # Takes tcpdump -vs0 udp and port 5060 as input on stdin.
@@ -10,20 +10,28 @@ import re
 
 class Packet(object):
     @classmethod
-    def create(self, time, from_, to, data):
+    def create(self, time_str, from_, to, data):
         if not data:
-            return Packet(time, from_, to, data)
+            return Packet(time_str, from_, to, data)
         word = data[0].split(' ', 1)[0]
         if word in ('INVITE', 'ACK', 'BYE', 'CANCEL', 'NOTIFY', 'OPTIONS', 'REFER', 'REGISTER',
                 'SUBSCRIBE', 'UPDATE', 'SIP/2.0'): # XXX: not exhaustive..
-            return SipPacket(time, from_, to, data)
-        return Packet(time, from_, to, data)
+            return SipPacket(time_str, from_, to, data)
+        return Packet(time_str, from_, to, data)
         
-    def __init__(self, time, from_, to, data):
-        self.time = time
+    def __init__(self, time_str, from_, to, data):
+        self.time_str = time_str
         self.from_ = from_
         self.to = to
         self.data = data
+
+    @property
+    def time(self):
+        if not hasattr(self, '_time'):
+            parsed = self.time_str.split(':', 2)
+            parsed2 = parsed[2].split('.')
+            self._time = datetime.time(int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1]))
+        return self._time
 
     def __repr__(self):
         summary = 'empty'
@@ -156,6 +164,12 @@ def pcapflat_to_packets(input):
             yield Packet.create(time, from_, to, data)
 
 
+def timediff(t0, t1):
+    seconds0 = t0.hour * 3600 + t0.minute * 60 + t0.second + t0.microsecond / 1000000.0
+    seconds1 = t1.hour * 3600 + t1.minute * 60 + t1.second + t1.microsecond / 1000000.0
+    return seconds1 - seconds0
+    
+
 def main(input, filter, show, err):
     # Use filter as show if show isn't supplied
     re_filter = re.compile(filter)
@@ -180,6 +194,11 @@ def main(input, filter, show, err):
     matching_dialogs = []
     for dialogid, dialog in dialogs.iteritems():
         for packet in dialog:
+#            # HACKS!
+#            if timediff(dialog[0].time, dialog[-1].time) > 2.0:
+#                continue
+#            if not dialog[0].from_.startswith('62'):
+#                continue
             if packet.search(re_filter):
                 matching_dialogs.append(dialog)
                 break
