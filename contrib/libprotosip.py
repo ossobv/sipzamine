@@ -109,7 +109,7 @@ class SipDialog(list):
         if not hasattr(self, '_is_established'):
             cseqs_200 = []
             for i in self[1:]:
-                if i.code == 200:
+                if i.method == 'INVITE' and i.code == 200:
                     cseqs_200.append(i.cseq[0])
                 elif i.method == 'ACK' and i.cseq[0] in cseqs_200:
                     self._is_established = True
@@ -173,7 +173,6 @@ class SipDialogs(object):
         # seconds old. INVITEs may be older, but only if established.
         for k, v in self.dialogs.items():
             yield_it = False
-
             if (latest_datetime - v[-1].datetime).seconds > 120:
                 if v[0].method != 'INVITE':
                     yield_it = True
@@ -191,6 +190,11 @@ class SipDialogs(object):
                 if yield_it:
                     self.yieldable.append(v)
                     del self.dialogs[k]
+
+        # Prefer output to be sorted.. it won't be 100%, but it looks
+        # better than nothing at all. If you want 100% sorting, I'm
+        # afraid you'll have to do it at the end (buffering all).
+        self.yieldable.sort(key=(lambda x: x[0].datetime))
 
 
 if __name__ == '__main__':
