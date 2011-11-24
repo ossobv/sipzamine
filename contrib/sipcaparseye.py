@@ -8,6 +8,7 @@ from libprotosip import SipDialogs # must import file so the type is registered
 
 # FIXME: rename this to: sipzamin (sip examine)
 # TODO: the verbosereader should add CR's back.. now that we have the libpcapreader it should be deprecated too..
+# TODO: accept more packet-match-re's to AND together
 
 # Matches dialogs and times and looks for certain info (EYE).
 # Takes tcpdump -vs0 udp and port 5060 as input on stdin.
