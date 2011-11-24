@@ -103,10 +103,9 @@ class PcapReader(object):
         if not pcap:
             raise ImportError('PcapReader requires pylibpcap support (python-libpcap)')
 
+        self.filenames = filenames
+        self.pcap_filter = pcap_filter
         self.pcap = pcap.pcapObject()
-        self.pcap.open_offline(*filenames)
-        if pcap_filter:
-            self.pcap.setfilter(pcap_filter, 0, 0)
 
         self.min_date = min_date
         self.max_date = max_date
@@ -116,11 +115,20 @@ class PcapReader(object):
 
     def next(self):
         while True:
-            try:
-                (pktlen, data, timestamp) = self.pcap.next()
-            except TypeError:
-                # Nonetype is not iterable
-                raise StopIteration
+            while True:
+                # Re-open a new file until we have a packet
+                try:
+                    (pktlen, data, timestamp) = self.pcap.next()
+                except (Exception, TypeError):
+                    # pcapObject must be initialized via open_* / Nonetype is not iterable
+                    if not self.filenames:
+                        raise StopIteration
+                    filename = self.filenames.pop(0)
+                    self.pcap.open_offline(filename)
+                    if self.pcap_filter:
+                        self.pcap.setfilter(self.pcap_filter, 0, 0)
+                else:
+                    break
 
             if self.min_date and timestamp < self.min_date:
                 continue
