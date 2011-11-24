@@ -60,40 +60,51 @@ def main(reader, filter, show, err):
 
 if __name__ == '__main__':
     import sys
+    try:
+        import argparse
+    except ImportError:
+        import argparse_1_2_1 as argparse
 
-    # Example: tcpdump -nnvs0 -r stored.pcap | sipcaparseye 'm=audio ([0-9]+) '
-    if len(sys.argv) not in (3, 4):
-        print >>sys.stderr, 'Usage: tcpdump -nnvs0 udp and port 5060 | %s - FILTER_RE [SHOW_RE]' % (sys.argv[0],)
-        sys.exit(1)
+    # Example: sipcaparseye -m '^INVITE' -H 'm=audio ([0-9]+)' -p 'host 1.2.3.4' 5060.pcap.00
 
-    if sys.argv[1] == '-':
+    parser = argparse.ArgumentParser(description='Search and examine SIP transactions/dialogs')
+    parser.add_argument('files', metavar='PCAP', nargs='+',
+            help='pcap files to parse, or - to read tcpdump -nnvs0 output from stdin')
+    parser.add_argument('--pcap', '-p', metavar='filter',
+            help='pcap filter expression')
+    parser.add_argument('--pmatch', '-m', metavar='regex',
+            help='packet in dialog must match regex')
+    parser.add_argument('--highlight', '-H', metavar='regex',
+            help='highlight first matchgroup in packets')
+
+    args = parser.parse_args()
+    if len(args.files) == 1 and args.files[0] == '-':
         reader = VerboseTcpdumpReader(sys.stdin)
     else:
-        reader = PcapReader([sys.argv[1]])
-
+        reader = PcapReader(args.files, args.pcap)
+        
     main(reader, sys.argv[2], ''.join(sys.argv[3:4]), err=sys.stderr)
 
     # Example usage:
     #
-    # # /usr/sbin/tcpdump -nnvs0 -r stored.pcap | sipcaparseye - 'm=audio ([0-9]+) '
+    # $ sipcaparseye -m 'sip:\+315' -H 'm=audio +(\d+)' stored.pcap
+    # (or)
+    # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap | sipcaparseye -m 'sip:\+315' -H 'm=audio +(\d+)' -
     #
-    # Example usage and output:
+    # Example output:
     #
-    # # /usr/sbin/tcpdump -nnvs0 udp and port 5060 -r 5060.pcap.00 | ./sipcaparseye.py - 'sip:\+315' 'm=audio (\d+)' | sed -e 's/^2011-11-24 //'
-    #
-    # reading from file 5060.pcap.00, link-type EN10MB (Ethernet)
     # [ 179978155f707e3622c0886752336210@22.22.22.22 ]
-    # 22:27:20.746782 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE <-- 11242
-    # 22:27:20.747508 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(100) 
-    # 22:27:20.783424 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200) <-- 10704
-    # 22:27:20.783956 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK 
-    # 22:27:41.665581 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE 
-    # 22:27:41.665721 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200) 
+    # 2011-11-23 22:27:20.746782 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE 
+    # 2011-11-23 22:27:20.747508 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(100) 
+    # 2011-11-23 22:27:20.783424 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200) 
+    # 2011-11-23 22:27:20.783956 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK 
+    # 2011-11-23 22:27:41.665581 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE <--
+    # 2011-11-23 22:27:41.665721 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200) 
     # 
     # [ 64e9278b4cdabb7c02f8c54f301937e7@22.22.22.22 ]
-    # 22:28:16.875647 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE <-- 10784
-    # 22:28:16.8764123.123.123.123.33:5060 > 22.22.22.22:5060 102 INVITE(100) 
-    # 22:28:16.901755 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200) <-- 16144
-    # 22:28:16.902327 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK 
-    # 22:28:24.363193 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE 
-    # 22:28:24.363352 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200) 
+    # 2011-11-23 22:28:16.875647 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE 
+    # 2011-11-23 22:28:16.876433 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(100) 
+    # 2011-11-23 22:28:16.901755 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200) 
+    # 2011-11-23 22:28:16.902327 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK 
+    # 2011-11-23 22:28:24.363193 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE <--
+    # 2011-11-23 22:28:24.363352 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200) 

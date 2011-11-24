@@ -86,13 +86,14 @@ class PcapReader(object):
         socket.IPPROTO_ICMP: 'ICMP'
     }
 
-    def __init__(self, filenames):
+    def __init__(self, filenames, pcap_filter=None):
         if not pcap:
             raise ImportError('PcapReader requires pylibpcap support (python-libpcap)')
 
         self.pcap = pcap.pcapObject()
         self.pcap.open_offline(*filenames)
-        # OPTIONALLY: p.setfilter(string.join(sys.argv[2:],' '), 0, 0)
+        if pcap_filter:
+            self.pcap.setfilter(pcap_filter, 0, 0)
 
     def __iter__(self):
         return self
