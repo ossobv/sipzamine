@@ -174,6 +174,7 @@ class SipDialogs(object):
         for k, v in self.dialogs.items():
             yield_it = False
             if (latest_datetime - v[-1].datetime).seconds > 120:
+                # FIXME: subscribe establishes a long standing dialog as well
                 if v[0].method != 'INVITE':
                     yield_it = True
 
