@@ -123,6 +123,7 @@ class VerboseTcpdumpReader(object):
         self.bogus_date = bogus_date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
         # FIXME increase the date when time wraps in next() iterator!
 
+        # FIXME: add warning if youre using date filter but no bogus_date
         self.min_date = min_date
         self.max_date = max_date
         if min_date or max_date:
@@ -251,6 +252,14 @@ def test_verbosetcpdumpreader():
             raise RuntimeError('Expected a SipPacket')
     if i != 2:
         raise RuntimeError('Expected exactly three results')
+
+    # Check that the date increases
+    reader = VerboseTcpdumpReader(StringIO(regdata + tcpdata + regdata))
+    for i, packet in enumerate(reader):
+        if i == 0:
+            start_date = packet.datetime.date()
+    if (packet.datetime.date() - start_date).days != 1:
+        raise RuntimeError('Expected date to increase by exactly one day')
 
 
 if __name__ == '__main__':
