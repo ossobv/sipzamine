@@ -161,6 +161,8 @@ class VerboseTcpdumpReader(object):
                         data.append(self.line[1:])
             except StopIteration:
                 self.input = None
+                if skip_it:
+                    raise
 
         # Parse time
         parsed = time.split(':', 2)
@@ -232,7 +234,17 @@ def test_verbosetcpdumpreader():
 \t
 \t
 '''
-        
+   
+    # Skip non-UDP input
+    reader = VerboseTcpdumpReader(StringIO(tcpdata))
+    try:
+        iter(reader).next()
+    except StopIteration:
+        pass
+    else:
+        raise RuntimeError('Expected StopIteration')
+
+    # Parse exactly 3 packets (reg + reg + bye)
     reader = VerboseTcpdumpReader(StringIO(tcpdata + regdata + regdata + byedata))
     for i, packet in enumerate(reader):
         if not isinstance(packet, SipPacket):
