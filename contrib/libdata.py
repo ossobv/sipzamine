@@ -6,7 +6,7 @@ import datetime, re, socket, struct
 try:
     import pcap # python-libpcap
 except ImportError:
-    # Fine.. but you must use the VerboseTcpdumpReader, passing tcpdump -nnvls0 output.
+    # Fine.. but you must use the VerboseTcpdumpReader, passing tcpdump -nnvs0 output.
     pcap = None
 
 from libproto import IpPacket
@@ -14,7 +14,7 @@ from libproto import IpPacket
 
 class VerboseTcpdumpReader(object):
     '''
-    Reads formatted verbose tcpdump output (-nnvls0).
+    Reads formatted verbose tcpdump output (-nnvs0).
     '''
     def __init__(self, file, bogus_date=None, min_date=None, max_date=None):
         self.input = file
