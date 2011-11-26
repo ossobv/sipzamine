@@ -2,7 +2,7 @@
 # sipcaparseye Data source lib
 # Copyright (C) Walter Doekes, OSSO B.V. 2011
 
-import datetime, re, socket, struct
+import datetime, re, socket, struct, sys
 try:
     import pcap # python-libpcap
 except ImportError:
@@ -10,83 +10,6 @@ except ImportError:
     pcap = None
 
 from libproto import IpPacket
-
-
-class VerboseTcpdumpReader(object):
-    '''
-    Reads formatted verbose tcpdump output (-nnvs0).
-    '''
-    def __init__(self, file, bogus_date=None, min_date=None, max_date=None):
-        self.input = file
-        self.line = None
-
-        self.time_re = re.compile('^(\d{2}:\d{2}:\d{2}\.(\d+)).*$')
-        self.from_to_re = re.compile('^    ([0-9.]+) > ([0-9.]+).*$')
-        self.bogus_date = bogus_date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
-        # FIXME increase the date when time wraps in next() iterator!
-
-        self.min_date = min_date
-        self.max_date = max_date
-        if min_date or max_date:
-            raise NotImplementedError() # convert date to datetime and filter those?
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if not self.input:
-            raise StopIteration
-        if not self.line:
-            self.line = self.input.next()
-
-        m = self.time_re.match(self.line)
-        time = m.groups()[0]
-
-        self.line = self.input.next()
-        m = self.from_to_re.match(self.line)
-        assert m, 'Failed to match from_to_re: %r' % (self.line,)
-        from_ = m.groups()[0]
-        to = m.groups()[1]
-
-        # get all until eof or next packet
-        data = []
-        try:
-            while True:
-                self.line = self.input.next()
-                if self.time_re.match(self.line):
-                    break
-                elif self.line.startswith('\t'):
-                    data.append(self.line[1:])
-        except StopIteration:
-            #self.input.close()
-            self.input = None
-
-        # Parse time
-        parsed = time.split(':', 2)
-        parsed2 = parsed[2].split('.')
-        time = datetime.datetime(
-            self.bogus_date.year, self.bogus_date.month, self.bogus_date.day,
-            int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1])
-        )
-
-        # Check time against our filters
-        # TODO
-
-        # Last line should contain TAB only, but sometimes it doesn't
-        if data and data[-1] == '\n':
-            data.pop()
-
-        # Parse from_/to
-        from_ = from_.rsplit('.', 1)
-        from_ = (from_[0], int(from_[1]))
-        to = to.rsplit('.', 1)
-        to = (to[0], int(to[1]))
-
-        # Select protocol
-        ip_proto = 'UDP' # tcpdump verbose mode lists TCP data completely differently
-
-        # (CRs are removed by tcpdump -v, data is now LF separated)
-        return IpPacket.create(time, ip_proto, from_, to, ''.join(data))
 
 
 class PcapReader(object):
@@ -109,6 +32,8 @@ class PcapReader(object):
 
         self.min_date = min_date
         self.max_date = max_date
+
+        self.proto_warnings = set() # store which protocols we have warned about
 
     def __iter__(self):
         return self
@@ -146,7 +71,15 @@ class PcapReader(object):
                 # IPv6 is *not* supported ATM
                 continue
 
-            ip_proto = self.protocols[ord(data[9])]
+            try:
+                num = ord(data[9])
+                ip_proto = self.protocols[num]
+            except KeyError:
+                if num not in self.proto_warnings:
+                    print >>sys.stderr, '(skipping unknown IP protocol %d on t %f)' % (num, timestamp)
+                    self.proto_warnings.add(num)
+                continue
+
             from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
             to = pcap.ntoa(struct.unpack('i', data[16:20])[0])
 
@@ -165,15 +98,104 @@ class PcapReader(object):
                     data = data[8:]
 
             else:
-                assert False, 'No support for ICMP'
+                if 'ICMP' not in self.proto_warnings:
+                    # Parsing ICMP is nice if we want to trace port-
+                    # unreachable messages.
+                    print >>sys.stderr, '(skipping IP ICMP protocol on t %f, not yet implemented)' % (timestamp,)
+                    self.proto_warnings.add('ICMP')
+                continue
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
         
 
+class VerboseTcpdumpReader(object):
+    '''
+    Reads formatted verbose tcpdump output (-nnvs0). It will read only
+    UDP. Everything else is skipped.
+    '''
+    def __init__(self, file, bogus_date=None, min_date=None, max_date=None):
+        self.input = file
+        self.line = None
+
+        self.time_re = re.compile('^(\d{2}:\d{2}:\d{2}\.(\d+)).*$')
+        self.from_to_re = re.compile('^    ([0-9.]+) > ([0-9.]+).*$')
+        self.bogus_date = bogus_date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
+        # FIXME increase the date when time wraps in next() iterator!
+
+        self.min_date = min_date
+        self.max_date = max_date
+        if min_date or max_date:
+            raise NotImplementedError() # convert date to datetime and filter those?
+
+    def __iter__(self):
+        self.line = self.input.next()
+        return self
+
+    def next(self):
+        if not self.input:
+            raise StopIteration
+
+        skip_it = True
+        while skip_it:
+            m = self.time_re.match(self.line)
+            assert m, 'Failed to match time_re: %r' % (self.line,)
+            time = m.groups()[0]
+            if 'proto UDP (17)' in self.line:
+                skip_it = False
+
+            self.line = self.input.next()
+            m = self.from_to_re.match(self.line)
+            assert m, 'Failed to match from_to_re: %r' % (self.line,)
+            from_ = m.groups()[0]
+            to = m.groups()[1]
+
+            # get all until eof or next packet
+            data = []
+            try:
+                while True:
+                    self.line = self.input.next()
+                    if self.time_re.match(self.line):
+                        break
+                    elif self.line.startswith('\t'):
+                        data.append(self.line[1:])
+            except StopIteration:
+                self.input = None
+
+        # Parse time
+        parsed = time.split(':', 2)
+        parsed2 = parsed[2].split('.')
+        time = datetime.datetime(
+            self.bogus_date.year, self.bogus_date.month, self.bogus_date.day,
+            int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1])
+        )
+
+        # Check time against our filters
+        # TODO
+
+        # Last line should contain TAB only, but sometimes it doesn't
+        if data and data[-1] == '\n':
+            data.pop()
+
+        # Parse from_/to
+        from_ = from_.rsplit('.', 1)
+        from_ = (from_[0], int(from_[1]))
+        to = to.rsplit('.', 1)
+        to = (to[0], int(to[1]))
+
+        # (CRs are removed by tcpdump -v, data is now LF separated)
+        # FIXME: do something about the CRs
+        return IpPacket.create(time, 'UDP', from_, to, ''.join(data))
+
+
 def test_verbosetcpdumpreader():
     from StringIO import StringIO
     from libprotosip import SipPacket
+    tcpdata = '''08:36:13.396439 IP (tos 0x0, ttl 64, id 3380, offset 0, flags [DF], proto TCP (6), length 123)
+    192.168.1.69.43620 > 192.168.1.70.1194: Flags [P.], cksum 0xdaa7 (correct), seq 4089035108:4089035179, ack 3621271904, win 15340, options [nop,nop,TS val 1337847 ecr 459981631], length 71
+08:36:13.435130 IP (tos 0x0, ttl 55, id 48663, offset 0, flags [DF], proto TCP (6), length 52)
+    192.168.1.70.1194 > 192.168.1.69.43620: Flags [.], cksum 0xbba0 (correct), ack 71, win 717, options [nop,nop,TS val 459982456 ecr 1337847], length 0
+'''
     regdata = '''22:24:58.461807 IP (tos 0x68, ttl 55, id 0, offset 0, flags [DF], proto UDP (17), length 712)
     11.22.33.44.5566 > 22.22.22.22.5060: SIP, length: 684
 \tREGISTER sip:sip.example.com SIP/2.0
@@ -211,7 +233,7 @@ def test_verbosetcpdumpreader():
 \t
 '''
         
-    reader = VerboseTcpdumpReader(StringIO(regdata + regdata + byedata))
+    reader = VerboseTcpdumpReader(StringIO(tcpdata + regdata + regdata + byedata))
     for i, packet in enumerate(reader):
         if not isinstance(packet, SipPacket):
             raise RuntimeError('Expected a SipPacket')
@@ -220,4 +242,5 @@ def test_verbosetcpdumpreader():
 
 
 if __name__ == '__main__':
+    #test_pcapreader()
     test_verbosetcpdumpreader()
