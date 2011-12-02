@@ -130,6 +130,7 @@ class SipDialogs(object):
         self.yieldable = []
 
     def __iter__(self):
+        self.input = iter(self.input)
         return self
 
     def next(self):
