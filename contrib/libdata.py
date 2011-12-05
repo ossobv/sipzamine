@@ -91,7 +91,7 @@ class PcapReader(object):
                 to = (to, struct.unpack('>H', data[2:4])[0])
 
                 if ip_proto == 'TCP':
-                    data_offset = (ord(data[12]) & 0xf) * 4 + 20
+                    data_offset = (ord(data[12]) >> 4) * 4
                     data = data[data_offset:]
 
                 else:
