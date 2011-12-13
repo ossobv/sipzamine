@@ -38,35 +38,39 @@ def dialog_filter(reader, packet_matches=None, min_duration=None, max_duration=N
                     
         yield dialog
     
-def print_dialog(dialog, packet_highlight=None):
+def print_dialog(dialog, packet_highlights=()):
     print '[', dialog[0].callid, ']'
     for packet in dialog:
-        highlight = ''
-        if packet_highlight:
+        highlights = []
+        for i, packet_highlight in enumerate(packet_highlights):
             found_here = packet.search(packet_highlight)
             if found_here:
-                if not found_here.groups():
-                    highlight = '<--'
+                if len(packet_highlights) == 1:
+                    arrow = '<--'
                 else:
-                    highlight = '<-- %s' % (found_here.groups()[0],)
+                    arrow = '<-%s-' % (chr(ord('a') + i),)
+                if not found_here.groups():
+                    highlights.append(arrow)
+                else:
+                    highlights.append('%s %s' % (arrow, found_here.groups()[0]))
             
         print '%s %s:%d > %s:%d %s %s %s' % (
             packet.datetime, packet.from_[0], packet.from_[1], packet.to[0], packet.to[1],
-            packet.cseq[0], packet.method_and_status, highlight
+            packet.cseq[0], packet.method_and_status, ' '.join(highlights)
         )
     print
 
-def main(reader, packet_matches=None, packet_highlight=None, min_duration=None, max_duration=None):
+def main(reader, packet_matches=None, packet_highlights=(), min_duration=None, max_duration=None):
     # Filter the dialogs
     matching_dialogs = []
     for dialog in dialog_filter(SipDialogs(reader), packet_matches, min_duration, max_duration):
-        print_dialog(dialog, packet_highlight)
+        print_dialog(dialog, packet_highlights)
         #matching_dialogs.append(dialog)
 
     # Order dialogs by begin-time and first then print them
     matching_dialogs.sort(key=lambda x: x[0].datetime)
     for dialog in matching_dialogs:
-        print_dialog(dialog, packet_highlight)
+        print_dialog(dialog, packet_highlights)
 
 
 if __name__ == '__main__':
@@ -104,8 +108,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--pmatch', '-m', metavar='regex', action='append', type=my_regex,
             help='packet in dialog must match regex (can be used multiple times)')
-    parser.add_argument('--highlight', '-H', metavar='regex', type=my_regex,
-            help='highlight first matchgroup in packets')
+    parser.add_argument('--highlight', '-H', metavar='regex', action='append', type=my_regex,
+            help='highlight first matchgroup in packets (multiple highlights are identified by letters a..z)')
 
     parser.add_argument('--mindate', metavar='date', type=my_strptime,
             help='packets must be younger than specified date')
@@ -125,13 +129,13 @@ if __name__ == '__main__':
     else:
         reader = PcapReader(args.files, pcap_filter=args.pcap, min_date=args.mindate, max_date=args.maxdate)
         
-    main(reader, packet_matches=args.pmatch, packet_highlight=args.highlight, min_duration=args.mindur, max_duration=args.maxdur)
+    main(reader, packet_matches=args.pmatch, packet_highlights=args.highlight, min_duration=args.mindur, max_duration=args.maxdur)
 
     # Example usage:
     #
-    # $ sipcaparseye -m 'sip:\+315' -H 'm=audio +(\d+)' stored.pcap
+    # $ sipcaparseye -m 'sip:\+315' -H '^BYE' --pcap 'host 123.123.123.123' stored.pcap
     # (or)
-    # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap | sipcaparseye -m 'sip:\+315' -H 'm=audio +(\d+)' -
+    # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap host 123.123.123.123 | sipcaparseye -m 'sip:\+315' -H '^BYE' -
     #
     # Example output:
     #
