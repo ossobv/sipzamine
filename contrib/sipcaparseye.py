@@ -64,8 +64,8 @@ def main(reader, packet_matches=None, packet_highlights=(), min_duration=None, m
     # Filter the dialogs
     matching_dialogs = []
     for dialog in dialog_filter(SipDialogs(reader), packet_matches, min_duration, max_duration):
-        print_dialog(dialog, packet_highlights)
-        #matching_dialogs.append(dialog)
+        #print_dialog(dialog, packet_highlights)
+        matching_dialogs.append(dialog)
 
     # Order dialogs by begin-time and first then print them
     matching_dialogs.sort(key=lambda x: x[0].datetime)
