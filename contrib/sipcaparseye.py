@@ -38,7 +38,9 @@ def dialog_filter(reader, packet_matches=None, min_duration=None, max_duration=N
                     
         yield dialog
     
-def print_dialog(dialog, packet_highlights=()):
+def print_dialog(dialog, packet_highlights=None):
+    packet_highlights = packet_highlights or () # make sure its iterable
+
     print '[', dialog[0].callid, ']'
     for packet in dialog:
         highlights = []
@@ -60,7 +62,7 @@ def print_dialog(dialog, packet_highlights=()):
         )
     print
 
-def main(reader, packet_matches=None, packet_highlights=(), min_duration=None, max_duration=None):
+def main(reader, packet_matches=None, packet_highlights=None, min_duration=None, max_duration=None):
     # Filter the dialogs
     matching_dialogs = []
     for dialog in dialog_filter(SipDialogs(reader), packet_matches, min_duration, max_duration):
