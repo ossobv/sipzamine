@@ -38,8 +38,10 @@ def dialog_filter(reader, packet_matches=None, min_duration=None, max_duration=N
                     
         yield dialog
     
-def print_dialog(dialog, packet_highlights=None):
+def print_dialog(dialog, packet_highlights=None, show_contents=False):
     packet_highlights = packet_highlights or () # make sure its iterable
+    if show_contents:
+        data_munge = re.compile('^', re.MULTILINE)
 
     print '[', dialog[0].callid, ']'
     for packet in dialog:
@@ -60,19 +62,23 @@ def print_dialog(dialog, packet_highlights=None):
             packet.datetime, packet.from_[0], packet.from_[1], packet.to[0], packet.to[1],
             packet.cseq[0], packet.method_and_status, ' '.join(highlights)
         )
+
+        if show_contents:
+            print data_munge.sub('  ', packet.data)
+
     print
 
-def main(reader, packet_matches=None, packet_highlights=None, min_duration=None, max_duration=None):
+def main(reader, packet_matches=None, packet_highlights=None, min_duration=None, max_duration=None, show_contents=False):
     # Filter the dialogs
     matching_dialogs = []
     for dialog in dialog_filter(SipDialogs(reader), packet_matches, min_duration, max_duration):
-        #print_dialog(dialog, packet_highlights)
+        #print_dialog(dialog, packet_highlights, show_contents=show_contents)
         matching_dialogs.append(dialog)
 
     # Order dialogs by begin-time and first then print them
     matching_dialogs.sort(key=lambda x: x[0].datetime)
     for dialog in matching_dialogs:
-        print_dialog(dialog, packet_highlights)
+        print_dialog(dialog, packet_highlights, show_contents=show_contents)
 
 
 if __name__ == '__main__':
@@ -123,6 +129,9 @@ if __name__ == '__main__':
     parser.add_argument('--maxdur', metavar='seconds', type=my_timedelta,
             help='dialogs/transactions must be longer than duration')
 
+    parser.add_argument('--contents', action='store_true', default=False,
+            help='show complete packet contents')
+
     args = parser.parse_args()
     if len(args.files) == 1 and args.files[0] == '-':
         if args.pcap:
@@ -131,7 +140,7 @@ if __name__ == '__main__':
     else:
         reader = PcapReader(args.files, pcap_filter=args.pcap, min_date=args.mindate, max_date=args.maxdate)
         
-    main(reader, packet_matches=args.pmatch, packet_highlights=args.highlight, min_duration=args.mindur, max_duration=args.maxdur)
+    main(reader, packet_matches=args.pmatch, packet_highlights=args.highlight, min_duration=args.mindur, max_duration=args.maxdur, show_contents=args.contents)
 
     # Example usage:
     #
