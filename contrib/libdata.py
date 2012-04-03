@@ -33,6 +33,9 @@ class PcapReader(object):
         self.min_date = min_date
         self.max_date = max_date
 
+        self.filename = None
+        self.link_type = None
+
         self.proto_warnings = set() # store which protocols we have warned about
 
     def __iter__(self):
@@ -48,10 +51,12 @@ class PcapReader(object):
                     # pcapObject must be initialized via open_* / Nonetype is not iterable
                     if not self.filenames:
                         raise StopIteration
-                    filename = self.filenames.pop(0)
-                    self.pcap.open_offline(filename)
+                    self.filename = self.filenames.pop(0)
+                    self.pcap.open_offline(self.filename)
                     if self.pcap_filter:
                         self.pcap.setfilter(self.pcap_filter, 0, 0)
+                    # set link type, needed below
+                    self.link_type = self.pcap.datalink()
                 else:
                     break
 
@@ -60,16 +65,42 @@ class PcapReader(object):
             if self.max_date and timestamp > self.max_date:
                 continue
 
-            # Ethernet => IP
-            if data[12:14] != '\x08\x00':
+            # Get frame payload
+            # http://www.tcpdump.org/linktypes.html
+            if self.link_type == pcap.DLT_EN10MB: # 0x1 Ethernet
+                #to_mac = data[0:6]
+                #from_mac = data[6:12]
+                payload = data[12:]
+            elif self.link_type == pcap.DLT_LINUX_SLL: # 0x71 Linux Cooked SSL
+                #packet_type = data[0:2]
+                #arphdr_type = data[2:4]
+                #lladdr_len = data[4:6] # =6 for mac
+                #lladdr = data[6:14] # first 6 bytes for macaddr
+                payload = data[14:]
+            else:
+                raise NotImplementedError('Unimplemented link type %d (0x%d) in %s' %
+                                          (self.link_type, self.link_type, self.filename))
+
+            # Get ethernet data
+            # http://en.wikipedia.org/wiki/EtherType
+            if payload[0:2] == '\x08\x00':
+                # IPv4
+                data = payload[2:]
+            elif payload[0:2] == '\x81\x00' or payload[0:2] == '\x88\xa8':
+                # 802.1Q or 802.1ad (Q-in-Q)
+                raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
+            elif payload[0:2] == '\x86\xdd':
+                # IPv6 is not implemented atm
                 continue
-            data = data[14:]
+            else:
+                # We might see arp or other stuff here. We're not
+                # interested in that.
+                continue
 
             version = (ord(data[0]) & 0xf0) >> 4
             header_len = ord(data[0]) & 0x0f
             if version != 4:
-                # IPv6 is *not* supported ATM
-                continue
+                raise ValueError('How did you get a version %d in an IPv4 header?' % (version,))
 
             try:
                 num = ord(data[9])
@@ -91,6 +122,9 @@ class PcapReader(object):
                 to = (to, struct.unpack('>H', data[2:4])[0])
 
                 if ip_proto == 'TCP':
+                    # FIXME: we need another layer for reassembling TCP
+                    # into a stream before attempting to do app-protocol
+                    # decoding on it
                     data_offset = (ord(data[12]) >> 4) * 4
                     data = data[data_offset:]
 
@@ -103,6 +137,7 @@ class PcapReader(object):
                     # unreachable messages.
                     print >>sys.stderr, '(skipping IP ICMP protocol on t %f, not yet implemented)' % (timestamp,)
                     self.proto_warnings.add('ICMP')
+                # XXX: do something with fragments?
                 continue
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
