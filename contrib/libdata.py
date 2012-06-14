@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai:
 # sipcaparseye Data source lib
-# Copyright (C) Walter Doekes, OSSO B.V. 2011
+# Copyright (C) Walter Doekes, OSSO B.V. 2011-2012
 
 import datetime, re, socket, struct, sys
 try:
@@ -36,7 +36,7 @@ class PcapReader(object):
         self.filename = None
         self.link_type = None
 
-        self.proto_warnings = set() # store which protocols we have warned about
+        self.warnings = set() # store what we've have warned about
 
     def __iter__(self):
         return self
@@ -83,32 +83,45 @@ class PcapReader(object):
 
             # Get ethernet data
             # http://en.wikipedia.org/wiki/EtherType
-            if payload[0:2] == '\x08\x00':
-                # IPv4
-                data = payload[2:]
-            elif payload[0:2] == '\x81\x00' or payload[0:2] == '\x88\xa8':
-                # 802.1Q or 802.1ad (Q-in-Q)
-                raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
-            elif payload[0:2] == '\x86\xdd':
-                # IPv6 is not implemented atm
-                continue
-            else:
-                # We might see arp or other stuff here. We're not
-                # interested in that.
+            data = None
+            while True:
+                if payload[0:2] == '\x08\x00':      # IPv4
+                    data = payload[2:]
+                    break
+                elif payload[0:2] == '\x81\x00':    # 802.1Q
+                    tci = payload[2:2] # pcp+cfi+vid
+                    payload = payload[4:]
+                    continue
+                elif payload[0:2] == '\x88\xa8':    # 802.1ad (Q-in-Q)
+                    raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
+                elif payload[0:2] == '\x91\x00':    # 802.1QinQ (non-standard)
+                    raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
+                elif payload[0:2] == '\x86\xdd':    # IPv6
+                    break # ignore
+                else:                               # Other unknown stuff (like ARP)
+                    break # ignore
+            # No relevant data? Continue to next packet
+            if data is None:
                 continue
 
-            version = (ord(data[0]) & 0xf0) >> 4
+            version = ord(data[0]) >> 4
             header_len = ord(data[0]) & 0x0f
             if version != 4:
                 raise ValueError('How did you get a version %d in an IPv4 header?' % (version,))
 
+            flags = ord(data[6]) >> 5
+            fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
+            if flags & 2:
+                self.warn_once('more_fragments', '(packet defragmentation not implemented yet, suppressing warning)') # FIXME
+            if fragment_offset:
+                self.warn_once('skip_fragment', '(skipping IP fragment, suppressing warning)')
+                continue
+
             try:
-                num = ord(data[9])
-                ip_proto = self.protocols[num]
+                proto_num = ord(data[9])
+                ip_proto = self.protocols[proto_num]
             except KeyError:
-                if num not in self.proto_warnings:
-                    print >>sys.stderr, '(skipping unknown IP protocol %d on t %f)' % (num, timestamp)
-                    self.proto_warnings.add(num)
+                self.warn_once('proto:%d' % (proto_num,), '(skipping unknown IP protocol %d on t %f, suppressing warning)' % (proto_num, timestamp))
                 continue
 
             from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
@@ -118,13 +131,13 @@ class PcapReader(object):
             data = data[4 * header_len:]
 
             if ip_proto in ('TCP', 'UDP'):
-                from_ = (from_, struct.unpack('>H', data[0:2])[0])
-                to = (to, struct.unpack('>H', data[2:4])[0])
+                from_ = (from_, struct.unpack('>H', data[0:2])[0])  # add port
+                to = (to, struct.unpack('>H', data[2:4])[0])        # add port
 
                 if ip_proto == 'TCP':
                     # FIXME: we need another layer for reassembling TCP
                     # into a stream before attempting to do app-protocol
-                    # decoding on it
+                    # decoding on it.
                     data_offset = (ord(data[12]) >> 4) * 4
                     data = data[data_offset:]
 
@@ -132,16 +145,18 @@ class PcapReader(object):
                     data = data[8:]
 
             else:
-                if 'ICMP' not in self.proto_warnings:
-                    # Parsing ICMP is nice if we want to trace port-
-                    # unreachable messages.
-                    print >>sys.stderr, '(skipping IP ICMP protocol on t %f, not yet implemented)' % (timestamp,)
-                    self.proto_warnings.add('ICMP')
-                # XXX: do something with fragments?
+                # Parsing ICMP is nice if we want to trace port-
+                # unreachable messages.
+                self.warn_once('proto:icmp', '(skipping IP ICMP protocol on t %f, not yet implemented, suppressing warning)' % (timestamp,))
                 continue
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
+    
+    def warn_once(self, key, message):
+        if key not in self.warnings:
+            print >>sys.stderr, message
+            self.warnings.add(key)
         
 
 class VerboseTcpdumpReader(object):
