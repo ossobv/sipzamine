@@ -67,7 +67,9 @@ class PcapReader(object):
 
             # Get frame payload
             # http://www.tcpdump.org/linktypes.html
-            if self.link_type == pcap.DLT_EN10MB: # 0x1 Ethernet
+            if self.link_type == pcap.DLT_RAW: # Dunno?
+                payload = data
+            elif self.link_type == pcap.DLT_EN10MB: # 0x1 Ethernet
                 #to_mac = data[0:6]
                 #from_mac = data[6:12]
                 payload = data[12:]
@@ -78,14 +80,17 @@ class PcapReader(object):
                 #lladdr = data[6:14] # first 6 bytes for macaddr
                 payload = data[14:]
             else:
-                raise NotImplementedError('Unimplemented link type %d (0x%d) in %s' %
+                raise NotImplementedError('Unimplemented link type %d (0x%x) in %s' %
                                           (self.link_type, self.link_type, self.filename))
 
             # Get ethernet data
             # http://en.wikipedia.org/wiki/EtherType
             data = None
             while True:
-                if payload[0:2] == '\x08\x00':      # IPv4
+                if self.link_type == pcap.DLT_RAW:
+                    data = payload
+                    break
+                elif payload[0:2] == '\x08\x00':    # IPv4
                     data = payload[2:]
                     break
                 elif payload[0:2] == '\x81\x00':    # 802.1Q
@@ -314,4 +319,9 @@ def test_verbosetcpdumpreader():
 
 if __name__ == '__main__':
     #test_pcapreader()
-    test_verbosetcpdumpreader()
+    #test_verbosetcpdumpreader()
+    import sys
+    p = PcapReader([sys.argv[1]])
+    for i in p:
+        print '%s: %s >> %s' % (i.datetime, i.from_, i.to)
+        print repr(i.data)
