@@ -11,6 +11,18 @@ from libprotosip import SipDialogs # must import file so the type is registered
 # TODO: the verbosereader should add CR's back.. now that we have the libpcapreader it should be deprecated too..
 
 
+class ShiftDate(object):
+    '''Simple object to shift all iterated object dates by dateskew.'''
+    def __init__(self, reader, skew):
+        self.reader = reader
+        self.skew = skew
+
+    def __iter__(self):
+        for item in self.reader:
+            item.datetime += self.skew
+            yield item
+
+        
 def dialog_filter(reader, packet_matches=None, min_duration=None, max_duration=None):
     for dialog in reader:
         # Filter against duration
@@ -119,6 +131,9 @@ if __name__ == '__main__':
     parser.add_argument('--highlight', '-H', metavar='regex', action='append', type=my_regex,
             help='highlight first matchgroup in packets (multiple highlights are identified by letters a..z)')
 
+    parser.add_argument('--dateskew', metavar='seconds', default=0, type=int,
+            help='offset added to all dates, can be negative (use when pcap clock was off)')
+
     parser.add_argument('--mindate', metavar='date', type=my_strptime,
             help='packets must be younger than specified date')
     parser.add_argument('--maxdate', metavar='date', type=my_strptime,
@@ -133,12 +148,24 @@ if __name__ == '__main__':
             help='show complete packet contents')
 
     args = parser.parse_args()
+    
+    # Update the search dates according to the date skew
+    if args.dateskew:
+        args.dateskew = datetime.timedelta(seconds=args.dateskew)
+        if args.mindate:
+            args.mindate += args.dateskew
+        if args.maxdate:
+            args.maxdate += args.dateskew
+
     if len(args.files) == 1 and args.files[0] == '-':
         if args.pcap:
             parser.error('Cannot use pcap filter with stdin mode')
         reader = VerboseTcpdumpReader(sys.stdin, min_date=args.mindate, max_date=args.maxdate)
     else:
         reader = PcapReader(args.files, pcap_filter=args.pcap, min_date=args.mindate, max_date=args.maxdate)
+
+    if args.dateskew:
+        reader = ShiftDate(reader, args.dateskew)
         
     main(reader, packet_matches=args.pmatch, packet_highlights=args.highlight, min_duration=args.mindur, max_duration=args.maxdur, show_contents=args.contents)
 
