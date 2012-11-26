@@ -80,7 +80,9 @@ class SipPacket(IpPacket):
             try:
                 word, rest = line.split(':', 1)
             except ValueError:
-                raise # FIXME
+                # Headers broken up too early? Can happen if we're
+                # reading an UDP fragment or a TCP stream.. FIXME
+                return None
             else:
                 word = word.strip().lower()
                 if word == header or (alt and word == alt):
@@ -92,6 +94,7 @@ class SipPacket(IpPacket):
             m = re_grep.search(line)
             if m:
                 return m
+        # FIXME: if body is not in headers, then we want to check body too
         return None
 
 IpPacket.register_subtype(SipPacket)
