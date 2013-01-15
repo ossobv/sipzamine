@@ -110,16 +110,16 @@ class PcapReader(object):
                 continue
 
             version = ord(data[0]) >> 4
-            header_len = ord(data[0]) & 0x0f
+            header_len = (ord(data[0]) & 0x0f) << 2
             if version != 4:
                 raise ValueError('How did you get a version %d in an IPv4 header?' % (version,))
 
             flags = ord(data[6]) >> 5
             fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
             if flags & 2:
-                self.warn_once('more_fragments', '(packet defragmentation not implemented yet, suppressing warning)') # FIXME
+                self.warn_once('more_fragments', '(packet defragmentation on t %f not implemented yet, suppressing warning)' % (timestamp,))
             if fragment_offset:
-                self.warn_once('skip_fragment', '(skipping IP fragment, suppressing warning)')
+                self.warn_once('fragment', '(skipping IP fragment on t %f, suppressing warning)' % (timestamp,))
                 continue
 
             try:
@@ -132,8 +132,8 @@ class PcapReader(object):
             from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
             to = pcap.ntoa(struct.unpack('i', data[16:20])[0])
 
-            # IP => TCP/UDP/ICMP
-            data = data[4 * header_len:]
+            # IP => TCP/UDP/ICMP/fragment
+            data = data[header_len:]
 
             if ip_proto in ('TCP', 'UDP'):
                 from_ = (from_, struct.unpack('>H', data[0:2])[0])  # add port
@@ -149,11 +149,13 @@ class PcapReader(object):
                 else:
                     data = data[8:]
 
-            else:
+            elif ip_proto == 'ICMP':
                 # Parsing ICMP is nice if we want to trace port-
                 # unreachable messages.
                 self.warn_once('proto:icmp', '(skipping IP ICMP protocol on t %f, not yet implemented, suppressing warning)' % (timestamp,))
                 continue
+            else:
+                raise NotImplementedError(ip_proto)
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
