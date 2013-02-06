@@ -28,7 +28,13 @@ class PcapReader(object):
 
         self.filenames = filenames
         self.pcap_filter = pcap_filter
-        self.pcap = pcap.pcapObject()
+
+        # This way we'll only need to watch out for a single exception when
+        # iterating.
+        class BogoPcap():
+            def next(self):
+                raise TypeError("'NoneType' object is not iterable")
+        self.pcap = BogoPcap()
 
         self.min_date = min_date
         self.max_date = max_date
@@ -46,11 +52,24 @@ class PcapReader(object):
             while True:
                 # Re-open a new file until we have a packet
                 try:
+                    # Fetch the next entry or raise TypeError:
+                    # "'NoneType' object is not iterable"
                     (pktlen, data, timestamp) = self.pcap.next()
-                except (Exception, TypeError):
-                    # pcapObject must be initialized via open_* / Nonetype is not iterable
+                except TypeError:
+                    # Unfortunately, the python-libpcap library does not
+                    # close any fd's. Looks like pcap_close() is never
+                    # called (and calling _pcap.delete_pcapObject(...)
+                    # ourselves does not help).
+                    # This means that we have to rely on the OS for FD
+                    # cleanup when finishing :(
+                    self.pcap = None
+
+                    # Are we done?
                     if not self.filenames:
                         raise StopIteration
+
+                    # Do we need a new file?
+                    self.pcap = pcap.pcapObject()
                     self.filename = self.filenames.pop(0)
                     self.pcap.open_offline(self.filename)
                     if self.pcap_filter:
