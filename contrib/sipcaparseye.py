@@ -147,7 +147,26 @@ if __name__ == '__main__':
     parser.add_argument('--contents', action='store_true', default=False,
             help='show complete packet contents')
 
-    args = parser.parse_args()
+    # We don't do parse_args(), but we do parse_known_args().
+    # If we did parse_args(), we'd choke on:
+    #   file1 file2 --someoption file3 file4
+    # with this error:
+    #   unrecognized arguments: file3 file4
+    # Using parse_known_args() we get the unknown arguments as extra files,
+    # but we'll have to add code to check for unknown options.
+    args, extra = parser.parse_known_args()
+
+    unrecognised = []
+    for i, value in enumerate(extra):
+        if value == '--':
+            extra.pop(i)
+            break
+        elif value and value[0] == '-':
+            unrecognised.append(value)
+    if unrecognised:
+        parser.error('unrecognized arguments: %s' % (' '.join(unrecognised),))
+
+    args.files.extend(extra)
     
     # Update the search dates according to the date skew
     if args.dateskew:
