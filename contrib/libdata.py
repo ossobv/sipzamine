@@ -66,7 +66,7 @@ class PcapReader(object):
 
                     # Are we done?
                     if not self.filenames:
-                        raise StopIteration
+                        raise StopIteration()
 
                     # Do we need a new file?
                     self.pcap = pcap.pcapObject()
@@ -211,7 +211,7 @@ class VerboseTcpdumpReader(object):
 
     def next(self):
         if not self.input:
-            raise StopIteration
+            raise StopIteration()
 
         skip_it = True
         while skip_it:
