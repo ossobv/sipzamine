@@ -1,6 +1,6 @@
-# vim: set ts=8 sw=4 sts=4 et ai:
-# sipzamin SIP Protocol lib
-# Copyright (C) Walter Doekes, OSSO B.V. 2011
+# vim: set ts=8 sw=4 sts=4 et ai tw=79:
+# sipcaparseye SIP Protocol lib
+# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
 
 from collections import defaultdict
 
@@ -15,7 +15,7 @@ class SipPacket(IpPacket):
             word = packet.data.split(' ', 1)[0]
             if word in ('INVITE', 'ACK', 'BYE', 'CANCEL', 'NOTIFY', 'OPTIONS',
                         'PUBLISH', 'REFER', 'REGISTER', 'SUBSCRIBE', 'UPDATE',
-                        'SIP/2.0'): # XXX: not exhaustive..
+                        'SIP/2.0'):  # XXX: not exhaustive..
                 return 0.8
         return 0.0
 
@@ -141,7 +141,7 @@ class SipDialogs(object):
         # Is there anything left to yield
         if self.yieldable:
             return self.yieldable.pop(0)
-            
+
         # Are we done?
         if not self.input:
             raise StopIteration
@@ -156,7 +156,10 @@ class SipDialogs(object):
                 # Check if there is anything we can yield already based
                 # on the latest timestamp (dialogs that are old enough
                 # to end).
-                if not self.latest_datetime or (packet.datetime - self.latest_datetime).seconds > 300:
+                # FIXME: sometimes we want this in a single dialog
+                # (subscribes?)
+                if (not self.latest_datetime or
+                    (packet.datetime - self.latest_datetime).seconds > 300):
                     self.update_yieldable(packet.datetime)
                     self.latest_datetime = packet.datetime
                     if self.yieldable:
@@ -183,13 +186,18 @@ class SipDialogs(object):
                 if v[0].method != 'INVITE':
                     yield_it = True
 
-                elif len(v) == 1 or v[-1].code: # only the invite, or any response but no ACK?
+                elif len(v) == 1 or v[-1].code:
+                    # An INVITE without ACK as last packet.
                     yield_it = True
 
-                elif not v.is_established() and v[-1].method == 'ACK' and v[-2].code >= 300: # fail and end
+                elif (not v.is_established() and v[-1].method == 'ACK' and
+                      v[-2].code >= 300):
+                    # An INVITE dialog that failed and was ACKed.
                     yield_it = True
 
-                elif v.is_established() and v[-1].method == 'BYE' and v[-1].code == 200:
+                elif (v.is_established() and v[-1].method == 'BYE' and
+                      v[-1].code == 200):
+                    # An INVITE dialog that has ended.
                     yield_it = True
 
                 # Yield it?
@@ -213,5 +221,7 @@ if __name__ == '__main__':
         ('1.2.3.4', 1234),
         'INVITE sip:+123@1.2.3.4...\r\nCSeq: 667 INVITE\r\n'
     )
-    assert isinstance(sip_packet, SipPacket), 'Packet is of type: %r' % (type(sip_packet),)
-    assert sip_packet.cseq == ('667', 'INVITE'), 'CSeq is: %r' % (sip_packet.cseq,)
+    assert isinstance(sip_packet, SipPacket), \
+        'Packet is of type: %r' % (type(sip_packet),)
+    assert sip_packet.cseq == ('667', 'INVITE'), \
+        'CSeq is: %r' % (sip_packet.cseq,)

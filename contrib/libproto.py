@@ -1,6 +1,6 @@
-# vim: set ts=8 sw=4 sts=4 et ai:
+# vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye Base Protocol lib
-# Copyright (C) Walter Doekes, OSSO B.V. 2011
+# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
 
 import datetime
 
@@ -12,7 +12,7 @@ class IpPacket(object):
     of registered refined types so you can get a subtype with more
     advanced methods instead.
     '''
-    __types = [] # the list of registered subtypes
+    __types = []  # the list of registered subtypes
 
     @classmethod
     def create(cls, datetime, ip_proto, from_, to, data):
@@ -47,12 +47,15 @@ class IpPacket(object):
             raise TypeError('Not an IpPacket', class_)
 
         try:
-            random_packet = IpPacket(datetime.datetime.now(), 'TCP', ('1.2.3.4', 1234), ('1.2.3.4', 1234), '')
+            random_packet = IpPacket(datetime.datetime.now(), 'TCP',
+                                     ('1.2.3.4', 1234), ('1.2.3.4', 1234), '')
             probability_check = class_.type_probability(random_packet)
             if not (0.0 <= probability_check <= 1.0):
                 raise NotImplementedError()
         except NotImplementedError:
-            raise TypeError('IpPacket subtype does not implement type_probability() correctly: Expected a float between 0 and 1')
+            raise TypeError('IpPacket subtype does not implement '
+                            'type_probability() correctly: Expected a float '
+                            'between 0 and 1')
 
         cls.__types.append(class_)
 
@@ -64,7 +67,7 @@ class IpPacket(object):
         us down.
         '''
         raise NotImplementedError()
-        
+
     def __init__(self, datetime, ip_proto, from_, to, data):
         self.datetime = datetime
         self.ip_proto = ip_proto
@@ -98,6 +101,7 @@ if __name__ == '__main__':
         ('1.2.3.4', 1234),
         'A bit of data'
     )
-    assert isinstance(ip_packet, IpPacket), 'Packet is of type: %r' % (type(ip_packet),)
+    assert isinstance(ip_packet, IpPacket), \
+        'Packet is of type: %r' % (type(ip_packet),)
     assert ip_packet.datetime == now
     assert ip_packet.data == data

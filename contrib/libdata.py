@@ -1,12 +1,17 @@
-# vim: set ts=8 sw=4 sts=4 et ai:
+# vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye Data source lib
-# Copyright (C) Walter Doekes, OSSO B.V. 2011-2012
+# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
 
-import datetime, re, socket, struct, sys
+import datetime
+import re
+import socket
+import struct
+import sys
 try:
-    import pcap # python-libpcap
+    import pcap  # python-libpcap
 except ImportError:
-    # Fine.. but you must use the VerboseTcpdumpReader, passing tcpdump -nnvs0 output.
+    # Fine.. but you must use the VerboseTcpdumpReader, feeding the output of
+    # ``tcpdump -nnvs0`` to stdin.
     pcap = None
 
 from libproto import IpPacket
@@ -22,9 +27,11 @@ class PcapReader(object):
         socket.IPPROTO_ICMP: 'ICMP'
     }
 
-    def __init__(self, filenames, pcap_filter=None, min_date=None, max_date=None):
+    def __init__(self, filenames, pcap_filter=None, min_date=None,
+                 max_date=None):
         if not pcap:
-            raise ImportError('PcapReader requires pylibpcap support (python-libpcap)')
+            raise ImportError('PcapReader requires pylibpcap support '
+                              '(python-libpcap)')
 
         self.filenames = filenames
         self.pcap_filter = pcap_filter
@@ -42,7 +49,7 @@ class PcapReader(object):
         self.filename = None
         self.link_type = None
 
-        self.warnings = set() # store what we've have warned about
+        self.warnings = set()  # store what we've have warned about
 
     def __iter__(self):
         return self
@@ -86,21 +93,22 @@ class PcapReader(object):
 
             # Get frame payload
             # http://www.tcpdump.org/linktypes.html
-            if self.link_type == pcap.DLT_RAW: # Dunno?
+            if self.link_type == pcap.DLT_RAW:  # Don't know??
                 payload = data
-            elif self.link_type == pcap.DLT_EN10MB: # 0x1 Ethernet
+            elif self.link_type == pcap.DLT_EN10MB:  # 0x1 Ethernet
                 #to_mac = data[0:6]
                 #from_mac = data[6:12]
                 payload = data[12:]
-            elif self.link_type == pcap.DLT_LINUX_SLL: # 0x71 Linux Cooked SSL
+            elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SSL
                 #packet_type = data[0:2]
                 #arphdr_type = data[2:4]
                 #lladdr_len = data[4:6] # =6 for mac
                 #lladdr = data[6:14] # first 6 bytes for macaddr
                 payload = data[14:]
             else:
-                raise NotImplementedError('Unimplemented link type %d (0x%x) in %s' %
-                                          (self.link_type, self.link_type, self.filename))
+                raise NotImplementedError('Not implemented link type %d (0x%x)'
+                                          ' in %s' % (self.link_type,
+                                          self.link_type, self.filename))
 
             # Get ethernet data
             # http://en.wikipedia.org/wiki/EtherType
@@ -113,17 +121,19 @@ class PcapReader(object):
                     data = payload[2:]
                     break
                 elif payload[0:2] == '\x81\x00':    # 802.1Q
-                    tci = payload[2:2] # pcp+cfi+vid
+                    tci = payload[2:2]  # pcp+cfi+vid
                     payload = payload[4:]
                     continue
                 elif payload[0:2] == '\x88\xa8':    # 802.1ad (Q-in-Q)
-                    raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
+                    raise NotImplementedError('VLAN-tagged ethernet frame '
+                                              'decoding not implemented yet.')
                 elif payload[0:2] == '\x91\x00':    # 802.1QinQ (non-standard)
-                    raise NotImplementedError('VLAN-tagged ethernet frame decoding not implemented yet.')
+                    raise NotImplementedError('VLAN-tagged ethernet frame '
+                                              'decoding not implemented yet.')
                 elif payload[0:2] == '\x86\xdd':    # IPv6
-                    break # ignore
-                else:                               # Other unknown stuff (like ARP)
-                    break # ignore
+                    break  # ignore
+                else:                               # Other stuff (like ARP)
+                    break  # ignore
             # No relevant data? Continue to next packet
             if data is None:
                 continue
@@ -131,21 +141,28 @@ class PcapReader(object):
             version = ord(data[0]) >> 4
             header_len = (ord(data[0]) & 0x0f) << 2
             if version != 4:
-                raise ValueError('How did you get a version %d in an IPv4 header?' % (version,))
+                raise ValueError('How did you get a version %d in an IPv4 '
+                                 'header?' % (version,))
 
             flags = ord(data[6]) >> 5
             fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
             if flags & 2:
-                self.warn_once('more_fragments', '(packet defragmentation on t %f not implemented yet, suppressing warning)' % (timestamp,))
+                msg = ('(packet defragmentation on t %f not implemented yet, '
+                       'suppressing warning)')
+                self.warn_once('more_fragments', msg % (timestamp,))
+                # but, carry on
             if fragment_offset:
-                self.warn_once('fragment', '(skipping IP fragment on t %f, suppressing warning)' % (timestamp,))
+                msg = '(skipping IP fragment on t %f, suppressing warning)'
+                self.warn_once('fragment', msg % (timestamp,))
                 continue
 
             try:
                 proto_num = ord(data[9])
                 ip_proto = self.protocols[proto_num]
             except KeyError:
-                self.warn_once('proto:%d' % (proto_num,), '(skipping unknown IP protocol %d on t %f, suppressing warning)' % (proto_num, timestamp))
+                msg = ('(skipping unknown IP protocol %d on t %f, suppressing '
+                       'warning)' % (proto_num, timestamp))
+                self.warn_once('proto:%d' % (proto_num,), msg)
                 continue
 
             from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
@@ -171,19 +188,21 @@ class PcapReader(object):
             elif ip_proto == 'ICMP':
                 # Parsing ICMP is nice if we want to trace port-
                 # unreachable messages.
-                self.warn_once('proto:icmp', '(skipping IP ICMP protocol on t %f, not yet implemented, suppressing warning)' % (timestamp,))
+                msg = ('(skipping IP ICMP protocol on t %f, not yet '
+                       'implemented, suppressing warning)')
+                self.warn_once('proto:icmp', msg % (timestamp,))
                 continue
             else:
                 raise NotImplementedError(ip_proto)
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
-    
+
     def warn_once(self, key, message):
         if key not in self.warnings:
             print >>sys.stderr, message
             self.warnings.add(key)
-        
+
 
 class VerboseTcpdumpReader(object):
     '''
@@ -196,14 +215,18 @@ class VerboseTcpdumpReader(object):
 
         self.time_re = re.compile('^(\d{2}:\d{2}:\d{2}\.(\d+)).*$')
         self.from_to_re = re.compile('^    ([0-9.]+) > ([0-9.]+).*$')
-        self.bogus_date = bogus_date or datetime.date.today() # you can supply a different date if you want, the verbose output doesn't show any
+        # The tcpdump verbose output does not show dates.
+        # FIXME: it does show the date if you supply -tttt, but until we
+        # specify that, we need a bogus date.
+        self.bogus_date = bogus_date or datetime.date.today()
         # FIXME increase the date when time wraps in next() iterator!
 
         # FIXME: add warning if youre using date filter but no bogus_date
         self.min_date = min_date
         self.max_date = max_date
         if min_date or max_date:
-            raise NotImplementedError() # convert date to datetime and filter those?
+            raise NotImplementedError('Filtering by date is not implemented '
+                                      'for the tcpdump input.')
 
     def __iter__(self):
         self.line = self.input.next()
@@ -311,7 +334,7 @@ def test_verbosetcpdumpreader():
 \t
 \t
 '''
-   
+
     # Skip non-UDP input
     reader = VerboseTcpdumpReader(StringIO(tcpdata))
     try:
@@ -322,7 +345,8 @@ def test_verbosetcpdumpreader():
         raise RuntimeError('Expected StopIteration')
 
     # Parse exactly 3 packets (reg + reg + bye)
-    reader = VerboseTcpdumpReader(StringIO(tcpdata + regdata + regdata + byedata))
+    reader = VerboseTcpdumpReader(StringIO(tcpdata + regdata + regdata +
+                                           byedata))
     for i, packet in enumerate(reader):
         if not isinstance(packet, SipPacket):
             raise RuntimeError('Expected a SipPacket')
@@ -341,7 +365,6 @@ def test_verbosetcpdumpreader():
 if __name__ == '__main__':
     #test_pcapreader()
     #test_verbosetcpdumpreader()
-    import sys
     p = PcapReader([sys.argv[1]])
     for i in p:
         print '%s: %s >> %s' % (i.datetime, i.from_, i.to)
