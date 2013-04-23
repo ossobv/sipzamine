@@ -91,7 +91,7 @@ class PcapReader(object):
             if self.max_date and timestamp > self.max_date:
                 continue
 
-            # Get frame payload
+            # Get frame payload (pcap-linktype(7))
             # http://www.tcpdump.org/linktypes.html
             if self.link_type == pcap.DLT_RAW:  # Don't know??
                 payload = data
