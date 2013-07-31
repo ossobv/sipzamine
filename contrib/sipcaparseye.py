@@ -12,45 +12,44 @@ from libprotosip import SipDialogs
 # libpcapreader it should be deprecated too..
 
 
-class ShiftDate(object):
-    '''Simple object to shift all iterated object dates by dateskew.'''
-    def __init__(self, reader, skew):
-        self.reader = reader
-        self.skew = skew
-
-    def __iter__(self):
-        for item in self.reader:
-            item.datetime += self.skew
-            yield item
+def dateskew_filter(reader, skew):
+    """
+    Alter reader to shift all iterated object dates by dateskew.
+    """
+    for packet in reader:
+        packet.datetime += skew
+        yield packet
 
 
-def dialog_filter(reader, packet_matches=None, min_duration=None,
-                  max_duration=None):
+def minduration_filter(reader, min_duration):
+    """
+    Filter dialogs by minimum duration.
+    """
     for dialog in reader:
-        # Filter against duration
-        if min_duration or max_duration:
-            duration = dialog[-1].datetime - dialog[0].datetime
-            if min_duration and duration < min_duration:
-                continue
-            if max_duration and duration > max_duration:
-                continue
+        duration = dialog[-1].datetime - dialog[0].datetime
+        if duration >= min_duration:
+            yield dialog
 
-        # Match dialogs by packet
-        if packet_matches:
-            matched = True
-            for packet_match in packet_matches:
-                # All matches must match
-                for packet in dialog:
-                    if packet.search(packet_match):
-                        break
-                else:
-                    matched = False
-                    break
 
-            if not matched:
-                continue
+def maxduration_filter(reader, max_duration):
+    """
+    Filter dialogs by maximum duration.
+    """
+    for dialog in reader:
+        duration = dialog[-1].datetime - dialog[0].datetime
+        if duration <= max_duration:
+            yield dialog
 
-        yield dialog
+
+def anyheader_filter(reader, header_match):
+    """
+    Filter dialogs by a regexp which must match any packet in the dialog.
+    """
+    for dialog in reader:
+        for packet in dialog:
+            if packet.search(header_match):
+                yield dialog
+                break
 
 
 def print_dialog(dialog, packet_highlights=None, show_contents=False):
@@ -90,8 +89,7 @@ def main(reader, packet_matches=None, packet_highlights=None,
          min_duration=None, max_duration=None, show_contents=False):
     # Filter the dialogs
     matching_dialogs = []
-    for dialog in dialog_filter(SipDialogs(reader), packet_matches,
-                                min_duration, max_duration):
+    for dialog in reader:
         #print_dialog(dialog, packet_highlights, show_contents=show_contents)
         matching_dialogs.append(dialog)
 
@@ -202,6 +200,7 @@ if __name__ == '__main__':
         if args.maxdate:
             args.maxdate += args.dateskew
 
+    # Create a packet reader
     if len(args.files) == 1 and args.files[0] == '-':
         if args.pcap:
             parser.error('Cannot use pcap filter with stdin mode')
@@ -211,35 +210,47 @@ if __name__ == '__main__':
         reader = PcapReader(args.files, pcap_filter=args.pcap,
                             min_date=args.mindate, max_date=args.maxdate)
 
+    # Optionally add a date skew on the packets
     if args.dateskew:
-        reader = ShiftDate(reader, args.dateskew)
+        reader = dateskew_filter(reader, skew=args.dateskew)
 
-    main(reader, packet_matches=args.pmatch, packet_highlights=args.highlight,
-         min_duration=args.mindur, max_duration=args.maxdur,
-         show_contents=args.contents)
+    # Convert the packets into SIP dialogs
+    reader = SipDialogs(reader)
+
+    # Optionally add duration and search filters
+    if args.mindur:
+        reader = minduration_filter(reader, min_duration=args.mindur)
+    if args.maxdur:
+        reader = maxduration_filter(reader, max_duration=args.maxdur)
+    if args.pmatch:
+        for pmatch in args.pmatch:
+            reader = anyheader_filter(reader, header_match=pmatch)
+
+    # Call main with our pimped reader
+    main(reader, packet_highlights=args.highlight, show_contents=args.contents)
 
     # Example usage:
     #
-    # $ sipcaparseye -m 'sip:\+315' -H '^BYE' --pcap 'host 123.123.123.123' \
+    # $ sipcaparseye -m 'sip:\+315' -H '^BYE' --pcap 'host banana' \
     #                stored.pcap
     # (or)
-    # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap host 123.123.123.123 |
+    # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap host banana |
     #       sipcaparseye -m 'sip:\+315' -H '^BYE' -
     #
     # Example output:
     #
     # [ 179978155f707e3622c0886752336210@22.22.22.22 ]
-    # 2011-11-23 22:27:20.746782 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE
-    # 2011-11-23 22:27:20.747508 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(100)
-    # 2011-11-23 22:27:20.783424 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200)
-    # 2011-11-23 22:27:20.783956 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK
-    # 2011-11-23 22:27:41.665581 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE <--
-    # 2011-11-23 22:27:41.665721 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200)
+    # 2011-11-23 22:27:20.746782 apple:5060 > banana:5060 102 INVITE
+    # 2011-11-23 22:27:20.747508 banana:5060 > apple:5060 102 INVITE(100)
+    # 2011-11-23 22:27:20.783424 banana:5060 > apple:5060 102 INVITE(200)
+    # 2011-11-23 22:27:20.783956 apple:5060 > banana:5060 102 ACK
+    # 2011-11-23 22:27:41.665581 apple:5060 > banana:5060 103 BYE <--
+    # 2011-11-23 22:27:41.665721 banana:5060 > apple:5060 103 BYE(200)
     #
-    # [ 64e9278b4cdabb7c02f8c54f301937e7@22.22.22.22 ]
-    # 2011-11-23 22:28:16.875647 22.22.22.22:5060 > 123.123.123.123:5060 102 INVITE
-    # 2011-11-23 22:28:16.876433 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(100)
-    # 2011-11-23 22:28:16.901755 123.123.123.123:5060 > 22.22.22.22:5060 102 INVITE(200)
-    # 2011-11-23 22:28:16.902327 22.22.22.22:5060 > 123.123.123.123:5060 102 ACK
-    # 2011-11-23 22:28:24.363193 22.22.22.22:5060 > 123.123.123.123:5060 103 BYE <--
-    # 2011-11-23 22:28:24.363352 123.123.123.123:5060 > 22.22.22.22:5060 103 BYE(200)
+    # [ 64e9278b4cdabb7c02f8c54f301937e7@apple ]
+    # 2011-11-23 22:28:16.875647 apple:5060 > banana:5060 102 INVITE
+    # 2011-11-23 22:28:16.876433 banana:5060 > apple:5060 102 INVITE(100)
+    # 2011-11-23 22:28:16.901755 banana:5060 > apple:5060 102 INVITE(200)
+    # 2011-11-23 22:28:16.902327 apple:5060 > banana:5060 102 ACK
+    # 2011-11-23 22:28:24.363193 apple:5060 > banana:5060 103 BYE <--
+    # 2011-11-23 22:28:24.363352 banana:5060 > apple:5060 103 BYE(200)
