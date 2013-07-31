@@ -145,6 +145,8 @@ if __name__ == '__main__':
     parser.add_argument('--pcap', '-p', metavar='filter',
             help='pcap filter expression')
 
+    # FIXME: remark that we're searches are performed on the header lines and
+    # can be anchored as such
     parser.add_argument('--pmatch', '-m', metavar='regex', action='append',
             type=my_regex,
             help=('packet in dialog must match regex (can be used multiple '
