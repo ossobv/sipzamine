@@ -41,6 +41,18 @@ def maxduration_filter(reader, max_duration):
             yield dialog
 
 
+def allheaders_filter(reader, header_match):
+    """
+    Filter dialogs by a regexp which must match all packets in the dialog.
+    """
+    for dialog in reader:
+        for packet in dialog:
+            if not packet.search(header_match):
+                break
+        else:
+            yield dialog
+
+
 def anyheader_filter(reader, header_match):
     """
     Filter dialogs by a regexp which must match any packet in the dialog.
@@ -147,8 +159,15 @@ if __name__ == '__main__':
     # can be anchored as such
     parser.add_argument('--pmatch', '-m', metavar='regex', action='append',
             type=my_regex,
-            help=('packet in dialog must match regex (can be used multiple '
-                  'times)'))
+            help=('any packet in dialog must match regex (can be used '
+                  'multiple times), e.g. ^INVITE to match calls'))
+    # FIXME: we may need to tweak the --option-name here too, and the
+    # description
+    parser.add_argument('--amatch', '-M', metavar='regex', action='append',
+            type=my_regex,
+            help='all packets in dialog must match regex (can be used '
+                 'multiple times), e.g. ^(SIP/2.0|INVITE|BYE) to match calls '
+                 'without an ACK')
     parser.add_argument('--highlight', '-H', metavar='regex', action='append',
             type=my_regex,
             help=('highlight first matchgroup in packets (multiple '
@@ -217,11 +236,15 @@ if __name__ == '__main__':
     # Convert the packets into SIP dialogs
     reader = SipDialogs(reader)
 
-    # Optionally add duration and search filters
+    # Optionally add duration and search filters (try to put the light weight
+    # ones first)
     if args.mindur:
         reader = minduration_filter(reader, min_duration=args.mindur)
     if args.maxdur:
         reader = maxduration_filter(reader, max_duration=args.maxdur)
+    if args.amatch:
+        for amatch in args.amatch:
+            reader = allheaders_filter(reader, header_match=amatch)
     if args.pmatch:
         for pmatch in args.pmatch:
             reader = anyheader_filter(reader, header_match=pmatch)
