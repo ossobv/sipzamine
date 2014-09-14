@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye main (SIP Pcap Parse Eye)
-# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2014 Walter Doekes, OSSO B.V.
 from datetime import datetime
-from time import mktime, strptime
 
 from libdata import PcapReader, VerboseTcpdumpReader
 from libprotosip import SipDialogs
@@ -152,6 +151,7 @@ def main(reader, packet_matches=None, packet_highlights=None,
 
 
 if __name__ == '__main__':
+    from time import mktime, strptime
     import re
     import sys
     try:

@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye Data source lib
-# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2014 Walter Doekes, OSSO B.V.
 
 import datetime
 import re
@@ -96,14 +96,14 @@ class PcapReader(object):
             if self.link_type == pcap.DLT_RAW:  # Don't know??
                 payload = data
             elif self.link_type == pcap.DLT_EN10MB:  # 0x1 Ethernet
-                #to_mac = data[0:6]
-                #from_mac = data[6:12]
+                # to_mac = data[0:6]
+                # from_mac = data[6:12]
                 payload = data[12:]
             elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SSL
-                #packet_type = data[0:2]
-                #arphdr_type = data[2:4]
-                #lladdr_len = data[4:6] # =6 for mac
-                #lladdr = data[6:14] # first 6 bytes for macaddr
+                # packet_type = data[0:2]
+                # arphdr_type = data[2:4]
+                # lladdr_len = data[4:6] # =6 for mac
+                # lladdr = data[6:14] # first 6 bytes for macaddr
                 payload = data[14:]
             else:
                 raise NotImplementedError('Not implemented link type %d (0x%x)'
@@ -121,7 +121,7 @@ class PcapReader(object):
                     data = payload[2:]
                     break
                 elif payload[0:2] == '\x81\x00':    # 802.1Q
-                    tci = payload[2:2]  # pcp+cfi+vid
+                    # tci = payload[2:2]  # pcp+cfi+vid
                     payload = payload[4:]
                     continue
                 elif payload[0:2] == '\x88\xa8':    # 802.1ad (Q-in-Q)
@@ -219,9 +219,9 @@ class VerboseTcpdumpReader(object):
         # FIXME: it does show the date if you supply -tttt, but until we
         # specify that, we need a bogus date.
         self.bogus_date = bogus_date or datetime.date.today()
-        # FIXME increase the date when time wraps in next() iterator!
+        self.last_datetime = None
 
-        # FIXME: add warning if youre using date filter but no bogus_date
+        # FIXME: add warning if you're using date filter but no bogus_date
         self.min_date = min_date
         self.max_date = max_date
         if min_date or max_date:
@@ -241,6 +241,21 @@ class VerboseTcpdumpReader(object):
             m = self.time_re.match(self.line)
             assert m, 'Failed to match time_re: %r' % (self.line,)
             time = m.groups()[0]
+
+            # Parse time
+            parsed = time.split(':', 2)
+            parsed2 = parsed[2].split('.')
+            time = datetime.datetime(
+                self.bogus_date.year, self.bogus_date.month,
+                self.bogus_date.day,
+                int(parsed[0]), int(parsed[1]),
+                int(parsed2[0]), int(parsed2[1])
+            )
+            if self.last_datetime and time < self.last_datetime:
+                time += datetime.timedelta(days=1)
+                self.bogus_date += datetime.timedelta(days=1)
+            self.last_datetime = time
+
             if 'proto UDP (17)' in self.line:
                 skip_it = False
 
@@ -264,14 +279,6 @@ class VerboseTcpdumpReader(object):
                 if skip_it:
                     raise
 
-        # Parse time
-        parsed = time.split(':', 2)
-        parsed2 = parsed[2].split('.')
-        time = datetime.datetime(
-            self.bogus_date.year, self.bogus_date.month, self.bogus_date.day,
-            int(parsed[0]), int(parsed[1]), int(parsed2[0]), int(parsed2[1])
-        )
-
         # Check time against our filters
         # TODO
 
@@ -293,12 +300,19 @@ class VerboseTcpdumpReader(object):
 def test_verbosetcpdumpreader():
     from StringIO import StringIO
     from libprotosip import SipPacket
-    tcpdata = '''08:36:13.396439 IP (tos 0x0, ttl 64, id 3380, offset 0, flags [DF], proto TCP (6), length 123)
-    192.168.1.69.43620 > 192.168.1.70.1194: Flags [P.], cksum 0xdaa7 (correct), seq 4089035108:4089035179, ack 3621271904, win 15340, options [nop,nop,TS val 1337847 ecr 459981631], length 71
-08:36:13.435130 IP (tos 0x0, ttl 55, id 48663, offset 0, flags [DF], proto TCP (6), length 52)
-    192.168.1.70.1194 > 192.168.1.69.43620: Flags [.], cksum 0xbba0 (correct), ack 71, win 717, options [nop,nop,TS val 459982456 ecr 1337847], length 0
+    tcpdata = '''08:36:13.396439 IP (tos 0x0, ttl 64, id 3380, offset 0, \
+flags [DF], proto TCP (6), length 123)
+    192.168.1.69.43620 > 192.168.1.70.1194: Flags [P.], cksum 0xdaa7 \
+(correct), seq 4089035108:4089035179, ack 3621271904, win 15340, options \
+[nop,nop,TS val 1337847 ecr 459981631], length 71
+08:36:13.435130 IP (tos 0x0, ttl 55, id 48663, offset 0, flags [DF], proto \
+TCP (6), length 52)
+    192.168.1.70.1194 > 192.168.1.69.43620: Flags [.], cksum 0xbba0 \
+(correct), ack 71, win 717, options [nop,nop,TS val 459982456 ecr 1337847], \
+length 0
 '''
-    regdata = '''22:24:58.461807 IP (tos 0x68, ttl 55, id 0, offset 0, flags [DF], proto UDP (17), length 712)
+    regdata = '''22:24:58.461807 IP (tos 0x68, ttl 55, id 0, offset 0, \
+flags [DF], proto UDP (17), length 712)
     11.22.33.44.5566 > 22.22.22.22.5060: SIP, length: 684
 \tREGISTER sip:sip.example.com SIP/2.0
 \tVia: SIP/2.0/UDP 11.22.33.44:5566;branch=z9hG4bK-53a7e057
@@ -307,7 +321,9 @@ def test_verbosetcpdumpreader():
 \tCall-ID: d5122bf8-525c393a@192.168.1.1
 \tCSeq: 131052 REGISTER
 \tMax-Forwards: 70
-\tAuthorization: Digest username="account",realm="example.com",nonce="47abd040",uri="sip:sip.example.com",algorithm=MD5,response="397a10af3e14baf63cfa22d755dce50b"
+\tAuthorization: Digest username="account",realm="example.com",\
+nonce="47abd040",uri="sip:sip.example.com",algorithm=MD5,\
+response="397a10af3e14baf63cfa22d755dce50b"
 \tContact: "Someone" <sip:account@11.22.33.44:5566>;expires=60
 \tUser-Agent: Cisco/SPA525G-7.4.9a
 \tContent-Length: 0
@@ -316,7 +332,8 @@ def test_verbosetcpdumpreader():
 \t
 \t
 '''
-    byedata = '''22:37:08.388039 IP (tos 0x10, ttl 62, id 0, offset 0, flags [DF], proto UDP (17), length 628)
+    byedata = '''22:37:08.388039 IP (tos 0x10, ttl 62, id 0, offset 0, \
+flags [DF], proto UDP (17), length 628)
     33.33.33.33.5060 > 22.22.22.22.5060: SIP, length: 600
 \tBYE sip:%2b31612345678@22.22.22.22 SIP/2.0
 \tRecord-Route: <sip:44.44.44.44;lr>
@@ -363,8 +380,8 @@ def test_verbosetcpdumpreader():
 
 
 if __name__ == '__main__':
-    #test_pcapreader()
-    #test_verbosetcpdumpreader()
+    # test_pcapreader()
+    # test_verbosetcpdumpreader()
     p = PcapReader([sys.argv[1]])
     for i in p:
         print '%s: %s >> %s' % (i.datetime, i.from_, i.to)

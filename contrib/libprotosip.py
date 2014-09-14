@@ -159,7 +159,8 @@ class SipDialogs(object):
                 # FIXME: sometimes we want this in a single dialog
                 # (subscribes?)
                 if (not self.latest_datetime or
-                    (packet.datetime - self.latest_datetime).seconds > 300):
+                        ((packet.datetime - self.latest_datetime).seconds >
+                         300)):
                     self.update_yieldable(packet.datetime)
                     self.latest_datetime = packet.datetime
                     if self.yieldable:
@@ -170,7 +171,7 @@ class SipDialogs(object):
             self.yieldable = self.dialogs.values()
             self.yieldable.sort(key=(lambda x: x[0].datetime))
             self.dialogs.clear()
-            #self.input.close()
+            # self.input.close()
             self.input = None
 
         # Return the yieldables or raise StopIteration
