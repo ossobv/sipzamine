@@ -2,6 +2,8 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye main (SIP Pcap Parse Eye)
 # Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
+from datetime import datetime
+from time import mktime, strptime
 
 from libdata import PcapReader, VerboseTcpdumpReader
 from libprotosip import SipDialogs
@@ -10,6 +12,44 @@ from libprotosip import SipDialogs
 # FIXME: rename this to: sipzamine (sip examine)
 # TODO: the verbosereader should add CR's back.. now that we have the
 # libpcapreader it should be deprecated too..
+
+
+class epochtime_without_date(object):
+    """
+    Magic float that ignores the date so time-only comparisons can be
+    done.  Take care to ensure that in datetime comparisons, this object
+    is on the LHS, so these overloaded __cmp__ operator can do its job.
+
+    NOTE: We calculate the delta between daylight saving time in the initial
+    value and the compared value ONLY ONCE.  This will produce crazy results
+    around DST changes.  Also, around hour 00:00 we cannot guarantee any
+    meaningful result either.  This is a quick hack that works in 95% of the
+    cases.
+    """
+    def __init__(self, floatval):
+        print >>sys.stderr, \
+            ('(warning: partial date parsing is inaccurate! use only if '
+             'you know understand the limitations)')
+        self.floatval = floatval
+        self.dstdelta = None
+
+    def __float__(self):
+        return self.floatval
+
+    def __cmp__(self, other):
+        otherval = float(other)
+
+        if self.dstdelta is None:
+            self.dstdelta = (
+                (datetime.fromtimestamp(otherval) -
+                 datetime.utcfromtimestamp(otherval)).seconds -
+                (datetime.fromtimestamp(self.floatval) -
+                 datetime.utcfromtimestamp(self.floatval)).seconds
+            )
+
+        selfval = self.floatval % 86400.0
+        otherval = (otherval + self.dstdelta) % 86400.0
+        return cmp(selfval, otherval)
 
 
 def dateskew_filter(reader, skew):
@@ -102,7 +142,7 @@ def main(reader, packet_matches=None, packet_highlights=None,
     # Filter the dialogs
     matching_dialogs = []
     for dialog in reader:
-        #print_dialog(dialog, packet_highlights, show_contents=show_contents)
+        # print_dialog(dialog, packet_highlights, show_contents=show_contents)
         matching_dialogs.append(dialog)
 
     # Order dialogs by begin-time and first then print them
@@ -112,10 +152,8 @@ def main(reader, packet_matches=None, packet_highlights=None,
 
 
 if __name__ == '__main__':
-    import datetime
     import re
     import sys
-    import time
     try:
         import argparse
     except ImportError:
@@ -128,7 +166,25 @@ if __name__ == '__main__':
             raise ValueError()
 
     def my_strptime(timestring):
-        return time.mktime(time.strptime(timestring, '%Y-%m-%d %H:%M:%S'))
+        for style, prefix in (
+                ('%Y-%m-%d %H:%M:%S', ''),
+                ('%Y-%m-%d %H:%M', ''),
+                ('%Y-%m-%d', ''),
+                ('%Y-%m-%d %H:%M:%S', '2000-01-01 '),
+                ('%Y-%m-%d %H:%M', '2000-01-01 ')):
+            try:
+                parsed = strptime(prefix + timestring, style)
+            except ValueError:
+                pass
+            else:
+                ret = mktime(parsed)
+                if prefix:
+                    ret = epochtime_without_date(ret)
+                break
+        else:
+            raise ValueError('Invalid time format, use YYYY-MM-DD '
+                             'HH:MM:SS or shortened')
+        return ret
 
     def my_timedelta(floatstring):
         if '.' in floatstring:

@@ -86,9 +86,9 @@ class PcapReader(object):
                 else:
                     break
 
-            if self.min_date and timestamp < self.min_date:
+            if self.min_date and self.min_date > timestamp:
                 continue
-            if self.max_date and timestamp > self.max_date:
+            if self.max_date and self.max_date < timestamp:
                 continue
 
             # Get frame payload (pcap-linktype(7))
