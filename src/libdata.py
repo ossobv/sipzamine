@@ -106,9 +106,9 @@ class PcapReader(object):
                 # lladdr = data[6:14] # first 6 bytes for macaddr
                 payload = data[14:]
             else:
-                raise NotImplementedError('Not implemented link type %d (0x%x)'
-                                          ' in %s' % (self.link_type,
-                                          self.link_type, self.filename))
+                raise NotImplementedError(
+                    'Not implemented link type %d (0x%x) in %s' %
+                    (self.link_type, self.link_type, self.filename))
 
             # Get ethernet data
             # http://en.wikipedia.org/wiki/EtherType

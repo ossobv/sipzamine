@@ -205,46 +205,57 @@ if __name__ == '__main__':
     description = 'Search and examine SIP transactions/dialogs'
     parser = argparse.ArgumentParser(description=description)
 
-    parser.add_argument('files', metavar='PCAP', nargs='+',
-            help=('pcap files to parse, or - to read tcpdump -nnvs0 output '
-                  'from stdin'))
-    parser.add_argument('--pcap', '-p', metavar='filter',
-            help='pcap filter expression')
+    parser.add_argument(
+        'files', metavar='PCAP', nargs='+',
+        help=('pcap files to parse, or - to read tcpdump -nnvs0 output '
+              'from stdin'))
+    parser.add_argument(
+        '--pcap', '-p', metavar='filter',
+        help='pcap filter expression')
 
-    # FIXME: remark that we're searches are performed on the header lines and
+    # FIXME: remark that the searches are performed on the header lines and
     # can be anchored as such
-    parser.add_argument('--pmatch', '-m', metavar='regex', action='append',
-            type=my_regex,
-            help=('any packet in dialog must match regex (can be used '
-                  'multiple times), e.g. ^INVITE to match calls'))
+    parser.add_argument(
+        '--pmatch', '-m', metavar='regex', action='append',
+        type=my_regex,
+        help=('any packet in dialog must match regex (can be used '
+              'multiple times), e.g. ^INVITE to match calls'))
     # FIXME: we may need to tweak the --option-name here too, and the
     # description
-    parser.add_argument('--amatch', '-M', metavar='regex', action='append',
-            type=my_regex,
-            help='all packets in dialog must match regex (can be used '
-                 'multiple times), e.g. ^(SIP/2.0|INVITE|BYE) to match calls '
-                 'without an ACK')
-    parser.add_argument('--highlight', '-H', metavar='regex', action='append',
-            type=my_regex,
-            help=('highlight first matchgroup in packets (multiple '
-                  'highlights are identified by letters a..z)'))
+    parser.add_argument(
+        '--amatch', '-M', metavar='regex', action='append',
+        type=my_regex,
+        help='all packets in dialog must match regex (can be used '
+             'multiple times), e.g. ^(SIP/2.0|INVITE|BYE) to match calls '
+             'without an ACK')
+    parser.add_argument(
+        '--highlight', '-H', metavar='regex', action='append',
+        type=my_regex,
+        help=('highlight first matchgroup in packets (multiple '
+              'highlights are identified by letters a..z)'))
 
-    parser.add_argument('--dateskew', metavar='seconds', default=0, type=int,
-            help=('offset added to all dates, can be negative (use when pcap '
-                  'clock was off)'))
+    parser.add_argument(
+        '--dateskew', metavar='seconds', default=0, type=int,
+        help=('offset added to all dates, can be negative (use when pcap '
+              'clock was off)'))
 
-    parser.add_argument('--mindate', metavar='date', type=my_strptime,
-            help='packets must be younger than specified date')
-    parser.add_argument('--maxdate', metavar='date', type=my_strptime,
-            help='packets must be older than specified date')
+    parser.add_argument(
+        '--mindate', metavar='date', type=my_strptime,
+        help='packets must be younger than specified date')
+    parser.add_argument(
+        '--maxdate', metavar='date', type=my_strptime,
+        help='packets must be older than specified date')
 
-    parser.add_argument('--mindur', metavar='seconds', type=my_timedelta,
-            help='dialogs/transactions must be shorter than duration')
-    parser.add_argument('--maxdur', metavar='seconds', type=my_timedelta,
-            help='dialogs/transactions must be longer than duration')
+    parser.add_argument(
+        '--mindur', metavar='seconds', type=my_timedelta,
+        help='dialogs/transactions must be shorter than duration')
+    parser.add_argument(
+        '--maxdur', metavar='seconds', type=my_timedelta,
+        help='dialogs/transactions must be longer than duration')
 
-    parser.add_argument('--contents', action='store_true', default=False,
-            help='show complete packet contents')
+    parser.add_argument(
+        '--contents', action='store_true', default=False,
+        help='show complete packet contents')
 
     # We don't do parse_args(), but we do parse_known_args().
     # If we did parse_args(), we'd choke on:
