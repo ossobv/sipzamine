@@ -102,7 +102,7 @@ IpPacket.register_subtype(SipPacket)
 
 class SipDialog(list):
     '''
-    Container for a list of packets belonging to the same dialog
+    Container for a list of packets belonging to the same dialog.
     '''
     def append(self, item):
         super(SipDialog, self).append(item)
