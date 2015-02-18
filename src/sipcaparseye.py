@@ -103,6 +103,23 @@ def anyheader_filter(reader, header_match):
                 break
 
 
+def retransmits_filter(reader, count):
+    """
+    Filter dialogs where at least count retransmits are observed.
+    """
+    assert count >= 1
+    for dialog in reader:
+        dupes = {}
+        for packet in dialog:
+            if packet.data not in dupes:
+                dupes[packet.data] = 0
+            else:
+                dupes[packet.data] += 1
+                if dupes[packet.data] >= count:
+                    yield dialog
+                    break
+
+
 def print_dialog(dialog, packet_highlights=None, show_contents=False):
     packet_highlights = packet_highlights or ()  # make sure it's iterable
     if show_contents:
@@ -216,21 +233,18 @@ if __name__ == '__main__':
     # FIXME: remark that the searches are performed on the header lines and
     # can be anchored as such
     parser.add_argument(
-        '--pmatch', '-m', metavar='regex', action='append',
-        type=my_regex,
+        '--pmatch', '-m', metavar='regex', action='append', type=my_regex,
         help=('any packet in dialog must match regex (can be used '
               'multiple times), e.g. ^INVITE to match calls'))
     # FIXME: we may need to tweak the --option-name here too, and the
     # description
     parser.add_argument(
-        '--amatch', '-M', metavar='regex', action='append',
-        type=my_regex,
+        '--amatch', '-M', metavar='regex', action='append', type=my_regex,
         help='all packets in dialog must match regex (can be used '
              'multiple times), e.g. ^(SIP/2.0|INVITE|BYE) to match calls '
              'without an ACK')
     parser.add_argument(
-        '--highlight', '-H', metavar='regex', action='append',
-        type=my_regex,
+        '--highlight', '-H', metavar='regex', action='append', type=my_regex,
         help=('highlight first matchgroup in packets (multiple '
               'highlights are identified by letters a..z)'))
 
@@ -252,6 +266,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--maxdur', metavar='seconds', type=my_timedelta,
         help='dialogs/transactions must be longer than duration')
+
+    parser.add_argument(
+        '--retransmits', metavar='count', default=0, type=int,
+        help='at least count retransmits must be involved')
 
     parser.add_argument(
         '--contents', action='store_true', default=False,
@@ -315,6 +333,8 @@ if __name__ == '__main__':
     if args.pmatch:
         for pmatch in args.pmatch:
             reader = anyheader_filter(reader, header_match=pmatch)
+    if args.retransmits:
+        reader = retransmits_filter(reader, count=args.retransmits)
 
     # Call main with our pimped reader
     main(reader, packet_highlights=args.highlight, show_contents=args.contents)
