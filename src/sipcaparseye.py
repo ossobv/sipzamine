@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipcaparseye main (SIP Pcap Parse Eye)
-# Copyright (C) 2011-2014 Walter Doekes, OSSO B.V.
-from datetime import datetime
+# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+from datetime import datetime, timedelta
 
 from libdata import PcapReader, VerboseTcpdumpReader
 from libprotosip import SipDialogs
@@ -214,7 +214,7 @@ if __name__ == '__main__':
                    0]                 # milliseconds
         if sum(num) == 0:
             raise ValueError('Specifying a zero time breaks boolean tests')
-        return datetime.timedelta(seconds=num[0], milliseconds=num[1])
+        return timedelta(seconds=num[0], milliseconds=num[1])
 
     # Example: sipcaparseye -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     # Update the search dates according to the date skew
     if args.dateskew:
-        args.dateskew = datetime.timedelta(seconds=args.dateskew)
+        args.dateskew = timedelta(seconds=args.dateskew)
         if args.mindate:
             args.mindate += args.dateskew
         if args.maxdate:
