@@ -4,7 +4,7 @@
 # Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
 from datetime import datetime, timedelta
 
-from sipzamine.libdata import PcapReader, VerboseTcpdumpReader
+from sipzamine.libdata import PcapReader
 from sipzamine.libprotosip import SipDialogs
 
 # Matches dialogs and times and looks for certain info.
@@ -223,8 +223,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         'files', metavar='PCAP', nargs='+',
-        help=('pcap files to parse, or - to read tcpdump -nnvs0 output '
-              'from stdin'))
+        help='pcap files to parse')
     parser.add_argument(
         '--pcap', '-p', metavar='filter',
         help='pcap filter expression')
@@ -285,14 +284,8 @@ if __name__ == '__main__':
             args.maxdate += args.dateskew
 
     # Create a packet reader
-    if len(args.files) == 1 and args.files[0] == '-':
-        if args.pcap:
-            parser.error('Cannot use pcap filter with stdin mode')
-        reader = VerboseTcpdumpReader(sys.stdin, min_date=args.mindate,
-                                      max_date=args.maxdate)
-    else:
-        reader = PcapReader(args.files, pcap_filter=args.pcap,
-                            min_date=args.mindate, max_date=args.maxdate)
+    reader = PcapReader(args.files, pcap_filter=args.pcap,
+                        min_date=args.mindate, max_date=args.maxdate)
 
     # Optionally add a date skew on the packets
     if args.dateskew:

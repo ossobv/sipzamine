@@ -3,7 +3,6 @@
 # Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
 
 import datetime
-import re
 import socket
 import struct
 import sys
