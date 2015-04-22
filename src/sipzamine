@@ -173,7 +173,7 @@ if __name__ == '__main__':
     import re
     import sys
 
-    from argparse14191 import ArgumentParser14191
+    from sipzamine.argparse14191 import ArgumentParser14191
 
     def my_regex(regexstring):
         try:

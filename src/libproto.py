@@ -90,18 +90,17 @@ class IpPacket(object):
         )
 
 
-if __name__ == '__main__':
-    # Simple test/example
-    now = datetime.datetime.now()
-    data = 'A bit of data'
-    ip_packet = IpPacket.create(
-        now,
-        'TCP',
-        ('1.2.3.4', 1234),
-        ('1.2.3.4', 1234),
-        'A bit of data'
-    )
-    assert isinstance(ip_packet, IpPacket), \
-        'Packet is of type: %r' % (type(ip_packet),)
-    assert ip_packet.datetime == now
-    assert ip_packet.data == data
+# # Simple test/example
+# now = datetime.datetime.now()
+# data = 'A bit of data'
+# ip_packet = IpPacket.create(
+#     now,
+#     'TCP',
+#     ('1.2.3.4', 1234),
+#     ('1.2.3.4', 1234),
+#     'A bit of data'
+# )
+# assert isinstance(ip_packet, IpPacket), \
+#     'Packet is of type: %r' % (type(ip_packet),)
+# assert ip_packet.datetime == now
+# assert ip_packet.data == data

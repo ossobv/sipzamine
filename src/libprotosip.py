@@ -4,7 +4,7 @@
 
 from collections import defaultdict
 
-from libproto import IpPacket
+from .libproto import IpPacket
 
 
 class SipPacket(IpPacket):
@@ -212,17 +212,16 @@ class SipDialogs(object):
         self.yieldable.sort(key=(lambda x: x[0].datetime))
 
 
-if __name__ == '__main__':
-    # Simple test/example
-    import datetime
-    sip_packet = IpPacket.create(
-        datetime.datetime.now(),
-        'UDP',
-        ('1.2.3.4', 1234),
-        ('1.2.3.4', 1234),
-        'INVITE sip:+123@1.2.3.4...\r\nCSeq: 667 INVITE\r\n'
-    )
-    assert isinstance(sip_packet, SipPacket), \
-        'Packet is of type: %r' % (type(sip_packet),)
-    assert sip_packet.cseq == ('667', 'INVITE'), \
-        'CSeq is: %r' % (sip_packet.cseq,)
+# # Simple test/example
+# import datetime
+# sip_packet = IpPacket.create(
+#     datetime.datetime.now(),
+#     'UDP',
+#     ('1.2.3.4', 1234),
+#     ('1.2.3.4', 1234),
+#     'INVITE sip:+123@1.2.3.4...\r\nCSeq: 667 INVITE\r\n'
+# )
+# assert isinstance(sip_packet, SipPacket), \
+#     'Packet is of type: %r' % (type(sip_packet),)
+# assert sip_packet.cseq == ('667', 'INVITE'), \
+#     'CSeq is: %r' % (sip_packet.cseq,)

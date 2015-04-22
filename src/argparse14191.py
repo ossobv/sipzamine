@@ -5,7 +5,7 @@
 try:
     from argparse import ArgumentParser
 except ImportError:
-    from argparse_1_2_1 import ArgumentParser
+    from .argparse_1_2_1 import ArgumentParser
 
 
 class ArgumentParser14191(ArgumentParser):

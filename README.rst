@@ -9,8 +9,6 @@ TODO
 - Upload to PyPI.
 - Add help text from https://code.osso.nl/projects/sipp.
 - Add tests: begin with a smallish pcap.
-- Do we need the libpcap dependency? Yes, we like -p => drop the
-  VerbosePcapReader.
 - Add the ability to write pcaps from the filter. Combine capability
   with sipscrub?
 - Compare this to sipgrep (and other tools?). And homer?
