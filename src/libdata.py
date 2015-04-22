@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
-# sipcaparseye Data source lib
-# Copyright (C) 2011-2014 Walter Doekes, OSSO B.V.
+# sipzamine Data source lib
+# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
 
 import datetime
 import re

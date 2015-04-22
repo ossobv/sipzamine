@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
-# sipcaparseye SIP Protocol lib
-# Copyright (C) 2011,2012,2013 Walter Doekes, OSSO B.V.
+# sipzamine SIP Protocol lib
+# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
 
 from collections import defaultdict
 

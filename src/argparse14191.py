@@ -1,5 +1,5 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
-# sipcaparseye Argparse wrapper
+# sipzamine Argparse wrapper
 # Copyright (C) 2015 Walter Doekes, OSSO B.V.
 
 try:

@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
-# sipcaparseye main (SIP Pcap Parse Eye)
+# sipzamine main (SIP Examine)
 # Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
 from datetime import datetime, timedelta
 
-from libdata import PcapReader, VerboseTcpdumpReader
-from libprotosip import SipDialogs
+from sipzamine.libdata import PcapReader, VerboseTcpdumpReader
+from sipzamine.libprotosip import SipDialogs
 
-# Matches dialogs and times and looks for certain info (EYE).
-# FIXME: rename this to: sipzamine (sip examine)
-# TODO: the verbosereader should add CR's back.. now that we have the
-# libpcapreader it should be deprecated too..
+# Matches dialogs and times and looks for certain info.
+__author__ = 'Walter Doekes'
+__copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015'
+__licence__ = 'GPLv3+'
+__version__ = '0.0'
 
 
 class epochtime_without_date(object):
@@ -214,7 +215,7 @@ if __name__ == '__main__':
             raise ValueError('Specifying a zero time breaks boolean tests')
         return timedelta(seconds=num[0], milliseconds=num[1])
 
-    # Example: sipcaparseye -m '^INVITE' -H 'm=audio ([0-9]+)' \
+    # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
 
     description = 'Search and examine SIP transactions/dialogs'
@@ -320,11 +321,11 @@ if __name__ == '__main__':
 
     # Example usage:
     #
-    # $ sipcaparseye -m 'sip:\+315' -H '^BYE' --pcap 'host banana' \
+    # $ sipzamine -m 'sip:\+315' -H '^BYE' --pcap 'host banana' \
     #                stored.pcap
     # (or)
     # $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap host banana |
-    #       sipcaparseye -m 'sip:\+315' -H '^BYE' -
+    #       sipzamine -m 'sip:\+315' -H '^BYE' -
     #
     # Example output:
     #

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
+# sipzamine Pcap wrapper lib
+# Copyright (C) 2015 Walter Doekes, OSSO B.V.
 from datetime import datetime
 from ctypes import (POINTER, Structure, byref, cdll, create_string_buffer,
                     c_char_p, c_long, c_ubyte, c_uint, c_void_p)
@@ -96,5 +98,5 @@ if __name__ == '__main__':
     # TODO:
     # (1) add filter-compile and filter-set
     # (2) add get-link-type
-    # (3) replace sipcaparseye pcap stuff with this and remark that it does
+    # (3) replace sipzamine pcap stuff with this and remark that it does
     # close fd's

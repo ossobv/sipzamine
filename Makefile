@@ -1,4 +1,6 @@
-# ...
+DATAFILES = LICENSE.txt README.rst
+BINFILES = src/sipzamine src/sipcaparseye
+PYFILES = $(wildcard src/*.py)
 
 .PHONY: default help
 default: pre-commit
@@ -38,6 +40,26 @@ vimmodelines:
 	  xargs --no-run-if-empty -0 grep -L '^# vim:' | \
 	  xargs --no-run-if-empty -d\\n \
 	    sed -i -e '1i# vim: set ts=8 sw=4 sts=4 et ai tw=79:'
+
+
+.PHONY: dist install isclean
+dist: isclean $(BINFILES) $(PYFILES) $(DATAFILES)
+	# do the sdist
+	python setup.py sdist
+	##python setup.py register # only needed once
+	#python setup.py sdist upload
+	# clean up
+	$(RM) MANIFEST
+
+install:
+	python setup.py install
+
+isclean:
+	# Check that there are no leftover unversioned python files.
+	# If there are, you should clean it up.
+	# (We check this, because the setup.py will include every .py it finds
+	# due to its find_package_module() function.)
+	! (git status | sed -e '1,/^# Untracked/d;/^#\t.*\.py$$/!d;s/^#\t/Untracked: /' | grep .)
 
 
 # Run me before committing.
