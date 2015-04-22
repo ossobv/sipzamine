@@ -2,6 +2,9 @@ DATAFILES = LICENSE.txt README.rst
 BINFILES = src/sipzamine src/sipcaparseye
 PYFILES = $(wildcard src/*.py)
 
+FLAKE8_ARGS = --max-line-length=79 --max-complexity=10 \
+	     --format='%(path)s %(row)d:%(col)d [%(code)s] %(text)s'
+
 .PHONY: default help
 default: pre-commit
 help:
@@ -12,7 +15,7 @@ help:
 
 .PHONY: htmlindent pepclean flake8 vimmodelines
 htmlindent:
-	find . -name '*.html' | while read n; do \
+	find src -name '*.html' | while read n; do \
 	  min=0; \
 	  sed -e 's/^\( *\).*/\1/;/^$$/d' < "$$n" | \
 	  sort -u | \
@@ -25,17 +28,18 @@ htmlindent:
 pepclean:
 	@# Replace tabs with spaces, remove trailing spaces, remove trailing newlines.
 	which pepclean >/dev/null && \
-	  find . '(' -name '*.py' -o -name '*.html' -o -name '*.xml' ')' \
+	  find src '(' -name '*.py' -o -name '*.html' -o -name '*.xml' ')' \
 	    -type f -print0 | xargs --no-run-if-empty -0 pepclean
+	pepclean src/sipzamine
 flake8: pepclean vimmodelines
 	@# Use a custom --format so the path is space separated for
 	@# easier copy-pasting.
-	-find . -name '*.py' '!' -name 'argparse_1_2_1.py' -print0 | \
-	  xargs --no-run-if-empty -0 flake8 \
-	    --max-line-length=79 --max-complexity=10 \
-	    --format='%(path)s %(row)d:%(col)d [%(code)s] %(text)s'
+	-find src -name '*.py' '!' -name 'argparse_1_2_1.py' -print0 | \
+	  xargs --no-run-if-empty -0 flake8 $(FLAKE8_ARGS)
+	flake8 $(FLAKE8_ARGS) src/sipzamine
+
 vimmodelines:
-	find . -name '*.py' '!' -name 'argparse_1_2_1.py' -size +0 \
+	find src -name '*.py' '!' -name 'argparse_1_2_1.py' -size +0 \
 	    '!' -perm -u=x -print0 | \
 	  xargs --no-run-if-empty -0 grep -L '^# vim:' | \
 	  xargs --no-run-if-empty -d\\n \
