@@ -7,7 +7,7 @@ with open('README.rst') as file:
 
 setup(
     name='sipzamine',
-    version='0.0',
+    version='0.1',
     scripts=['src/sipzamine', 'src/sipcaparseye'],
     package_dir={'sipzamine': 'src'},
     packages=['sipzamine'],
