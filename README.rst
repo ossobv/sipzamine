@@ -110,8 +110,8 @@ How do I get ``pcap`` files?
 .. _tcpdump: http://www.tcpdump.org/
 .. _tcpdump247: https://github.com/ossobv/vcutil/blob/master/tcpdump247
 
-.. |pypi_version| image:: https://pypip.in/version/sipzamine/badge.svg
+.. |pypi_version| image:: https://img.shields.io/pypi/v/sipzamine.svg
     :target: https://pypi.python.org/pypi/sipzamine
 
-.. |pypi_downloads| image:: https://pypip.in/download/sipzamine/badge.svg
+.. |pypi_downloads| image:: https://img.shields.io/pypi/dm/sipzamine.svg
     :target: https://pypi.python.org/pypi/sipzamine
