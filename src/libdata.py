@@ -1,18 +1,29 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine Data source lib
-# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
 
 import datetime
 import socket
 import struct
 import sys
 
+
 try:
     import pcap  # python-libpcap
 except ImportError:
-    raise ImportError('Please install python-libpcap (pylibpcap)')
+    try:
+        import pcapy as pcap
+    except ImportError:
+        if sys.version_info.major < 3:
+            raise ImportError('Please apt install python-libpcap (pylibpcap)')
+        raise ImportError('Please pip install pcapy (libpcap replacement)')
 
 from .libproto import IpPacket
+
+if sys.version_info.major < 3:
+    tobytes = bytearray  # mutable byte array, behaving like py3-bytes
+else:
+    tobytes = (lambda x: x)
 
 
 class PcapReader(object):
@@ -52,14 +63,27 @@ class PcapReader(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         while True:
             while True:
                 # Re-open a new file until we have a packet
                 try:
                     # Fetch the next entry or raise TypeError:
                     # "'NoneType' object is not iterable"
-                    (pktlen, data, timestamp) = self.pcap.next()
+                    next_packet = self.pcap.next()
+
+                    if len(next_packet) == 3:
+                        # pylibpcap
+                        (pktlen, data, timestamp) = next_packet
+                    else:
+                        # pcapy
+                        (pkthdr, data) = next_packet
+                        # pcapy returns (None, '') for the last packet
+                        if pkthdr is None:
+                            raise TypeError('EOF')
+                        timestamp = pkthdr.getts()
+                        timestamp = timestamp[0] + timestamp[1] * 0.000001
+
                 except TypeError:
                     # Unfortunately, the python-libpcap library does not
                     # close any fd's. Looks like pcap_close() is never
@@ -74,15 +98,27 @@ class PcapReader(object):
                         raise StopIteration()
 
                     # Do we need a new file?
-                    self.pcap = pcap.pcapObject()
-                    self.filename = self.filenames.pop(0)
-                    self.pcap.open_offline(self.filename)
+                    try:
+                        self.pcap = pcap.pcapObject
+                    except AttributeError:
+                        # pcapy
+                        self.filename = self.filenames.pop(0)
+                        self.pcap = pcap.open_offline(self.filename)
+                    else:
+                        # pylibpcap
+                        self.pcap = pcap.pcapObject()
+                        self.filename = self.filenames.pop(0)
+                        self.pcap.open_offline(self.filename)
+
                     if self.pcap_filter:
                         self.pcap.setfilter(self.pcap_filter, 0, 0)
                     # set link type, needed below
                     self.link_type = self.pcap.datalink()
                 else:
                     break
+
+            # On python2, convert to list-of-integers.
+            data = tobytes(data)
 
             if self.min_date and self.min_date > timestamp:
                 continue
@@ -115,34 +151,34 @@ class PcapReader(object):
                 if self.link_type == pcap.DLT_RAW:
                     data = payload
                     break
-                elif payload[0:2] == '\x08\x00':    # IPv4
+                elif payload[0:2] == b'\x08\x00':    # IPv4
                     data = payload[2:]
                     break
-                elif payload[0:2] == '\x81\x00':    # 802.1Q
+                elif payload[0:2] == b'\x81\x00':    # 802.1Q
                     # tci = payload[2:2]  # pcp+cfi+vid
                     payload = payload[4:]
                     continue
-                elif payload[0:2] == '\x88\xa8':    # 802.1ad (Q-in-Q)
+                elif payload[0:2] == b'\x88\xa8':    # 802.1ad (Q-in-Q)
                     raise NotImplementedError('VLAN-tagged ethernet frame '
                                               'decoding not implemented yet.')
-                elif payload[0:2] == '\x91\x00':    # 802.1QinQ (non-standard)
+                elif payload[0:2] == b'\x91\x00':    # 802.1QinQ (non-standard)
                     raise NotImplementedError('VLAN-tagged ethernet frame '
                                               'decoding not implemented yet.')
-                elif payload[0:2] == '\x86\xdd':    # IPv6
+                elif payload[0:2] == b'\x86\xdd':    # IPv6
                     break  # ignore
-                else:                               # Other stuff (like ARP)
+                else:                                # Other stuff (like ARP)
                     break  # ignore
             # No relevant data? Continue to next packet
             if data is None:
                 continue
 
-            version = ord(data[0]) >> 4
-            header_len = (ord(data[0]) & 0x0f) << 2
+            version = data[0] >> 4
+            header_len = (data[0] & 0x0f) << 2
             if version != 4:
                 raise ValueError('How did you get a version %d in an IPv4 '
                                  'header?' % (version,))
 
-            flags = ord(data[6]) >> 5
+            flags = data[6] >> 5
             fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
             if flags & 2:
                 msg = ('(packet defragmentation on t %f not implemented yet, '
@@ -155,7 +191,7 @@ class PcapReader(object):
                 continue
 
             try:
-                proto_num = ord(data[9])
+                proto_num = data[9]
                 ip_proto = self.protocols[proto_num]
             except KeyError:
                 msg = ('(skipping unknown IP protocol %d on t %f, suppressing '
@@ -163,8 +199,8 @@ class PcapReader(object):
                 self.warn_once('proto:%d' % (proto_num,), msg)
                 continue
 
-            from_ = pcap.ntoa(struct.unpack('i', data[12:16])[0])
-            to = pcap.ntoa(struct.unpack('i', data[16:20])[0])
+            from_ = socket.inet_ntoa(bytes(data[12:16]))
+            to = socket.inet_ntoa(bytes(data[16:20]))
 
             # IP => TCP/UDP/ICMP/fragment
             data = data[header_len:]
@@ -177,7 +213,7 @@ class PcapReader(object):
                     # FIXME: we need another layer for reassembling TCP
                     # into a stream before attempting to do app-protocol
                     # decoding on it.
-                    data_offset = (ord(data[12]) >> 4) * 4
+                    data_offset = (data[12] >> 4) * 4
                     data = data[data_offset:]
 
                 else:
@@ -195,8 +231,9 @@ class PcapReader(object):
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
+    next = __next__
 
     def warn_once(self, key, message):
         if key not in self.warnings:
-            print >>sys.stderr, message
+            sys.stderr.write(message + '\n')
             self.warnings.add(key)

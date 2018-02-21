@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine SIP Protocol lib
-# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
 
 from collections import defaultdict
 
@@ -12,10 +12,10 @@ class SipPacket(IpPacket):
     def type_probability(cls, packet):
         # TODO: up the probability if one of more of the ports are 5060
         if packet.data:
-            word = packet.data.split(' ', 1)[0]
-            if word in ('INVITE', 'ACK', 'BYE', 'CANCEL', 'NOTIFY', 'OPTIONS',
-                        'PUBLISH', 'REFER', 'REGISTER', 'SUBSCRIBE', 'UPDATE',
-                        'INFO', 'SIP/2.0'):  # XXX: not exhaustive..
+            word = packet.data.split(b' ', 1)[0]
+            if word in (b'INVITE', b'ACK', b'BYE', b'CANCEL', b'NOTIFY', 'OPTIONS',
+                        b'PUBLISH', b'REFER', b'REGISTER', b'SUBSCRIBE', b'UPDATE',
+                        b'INFO', b'SIP/2.0'):  # XXX: not exhaustive..
                 return 0.8
         return 0.0
 
@@ -23,6 +23,11 @@ class SipPacket(IpPacket):
     def __init__(self, datetime, ip_proto, from_, to, data):
         super(SipPacket, self).__init__(datetime, ip_proto, from_, to, data)
         # FIXME: split up data in header and data
+        try:
+            data = data.decode('utf-8')  # should be valid utf-8
+        except UnicodeDecodeError:
+            data = data.decode('utf-8', 'replace')
+            sys.stderr.write('(utf-8 decode error in %r)\n'.format(data))
         self.headers = data.split('\n')
 
     @property
@@ -137,14 +142,14 @@ class SipDialogs(object):
         self.input = iter(self.input)
         return self
 
-    def next(self):
+    def __next__(self):
         # Is there anything left to yield
         if self.yieldable:
             return self.yieldable.pop(0)
 
         # Are we done?
         if not self.input:
-            raise StopIteration
+            raise StopIteration()
 
         # Fetch more packets
         try:
@@ -169,18 +174,19 @@ class SipDialogs(object):
         except StopIteration:
             # Time to yield everything we have
             self.yieldable = self.dialogs.values()
-            self.yieldable.sort(key=(lambda x: x[0].datetime))
+            self.yieldable = sorted(self.yieldable, key=(lambda x: x[0].datetime))
             self.dialogs.clear()
             # self.input.close()
             self.input = None
 
         # Return the yieldables or raise StopIteration
-        return self.next()
+        return self.__next__()
+    next = __next__
 
     def update_yieldable(self, latest_datetime):
         # Loop over dialogs, all non-INVITEs shan't be more than 120
         # seconds old. INVITEs may be older, but only if established.
-        for k, v in self.dialogs.items():
+        for k, v in list(self.dialogs.items()):
             yield_it = False
             if (latest_datetime - v[-1].datetime).seconds > 120:
                 # FIXME: subscribe establishes a long standing dialog as well

@@ -7,7 +7,7 @@ with open('README.rst') as file:
 
 setup(
     name='sipzamine',
-    version='0.1.2',
+    version='0.2.dev0',  # 0.2_dev
     scripts=['src/sipzamine', 'src/sipcaparseye'],
     package_dir={'sipzamine': 'src'},
     packages=['sipzamine'],
@@ -30,7 +30,7 @@ setup(
         'Topic :: System :: Networking :: Monitoring',
     ],
     install_requires=[
-        # 'pylibpcap' || 'pypcapfile'
+        # 'pylibpcap' || 'pcapy'
         # The former refuses to install easily using pip, use your
         # OS package manager if possible.
     ],

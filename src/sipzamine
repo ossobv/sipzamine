@@ -9,9 +9,9 @@ from sipzamine.libprotosip import SipDialogs
 
 # Matches dialogs and times and looks for certain info.
 __author__ = 'Walter Doekes'
-__copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015'
+__copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015,2018'
 __licence__ = 'GPLv3+'
-__version__ = '0.1.2'
+__version__ = '0.2_dev'
 
 
 class epochtime_without_date(object):
@@ -27,9 +27,9 @@ class epochtime_without_date(object):
     cases.
     """
     def __init__(self, floatval):
-        print >>sys.stderr, \
-            ('(warning: partial date parsing is inaccurate! use only if '
-             'you know understand the limitations)')
+        sys.stderr.write(
+            '(warning: partial date parsing is inaccurate! use only if '
+            'you know understand the limitations)\n')
         self.floatval = floatval
         self.dstdelta = None
 
@@ -126,7 +126,7 @@ def print_dialog(dialog, packet_highlights=None, show_contents=False):
     if show_contents:
         data_munge = re.compile('^', re.MULTILINE)
 
-    print '[', dialog[0].callid, ']'
+    print('[ %s ]' % (dialog[0].callid,))
     for packet in dialog:
         highlights = []
         for i, packet_highlight in enumerate(packet_highlights):
@@ -142,16 +142,16 @@ def print_dialog(dialog, packet_highlights=None, show_contents=False):
                     highlights.append('%s %s' %
                                       (arrow, found_here.groups()[0]))
 
-        print '%s %s:%d > %s:%d %s %s %s' % (
+        print('%s %s:%d > %s:%d %s %s %s' % (
             packet.datetime, packet.from_[0], packet.from_[1],
             packet.to[0], packet.to[1],
             packet.cseq[0], packet.method_and_status, ' '.join(highlights)
-        )
+        ))
 
         if show_contents:
-            print data_munge.sub('  ', packet.data)
+            print(data_munge.sub('  ', packet.data))
 
-    print
+    print('')
 
 
 def main(reader, packet_matches=None, packet_highlights=None,

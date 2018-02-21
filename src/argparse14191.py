@@ -25,7 +25,7 @@ class ArgumentParser14191(ArgumentParser):
                           ('cmd 1 -f1 2 3', 'would_fail'),
                           ('cmd 1 2 3 -f1', 'ok')):
             try: out = parser.parse_args(args.split())
-            except: print 'args', 'failed', res
+            except: print('args', 'failed', res)
             # out: Namespace(cmd='cmd', foo='1', rest=['1', '2', '3'])
 
     Bugs: http://bugs.python.org/issue14191
