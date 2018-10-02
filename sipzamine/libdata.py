@@ -3,6 +3,7 @@
 # Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
 
 import datetime
+import os
 import socket
 import struct
 import sys
@@ -17,6 +18,7 @@ except ImportError:
             raise ImportError('Please apt install python-libpcap (pylibpcap)')
         raise ImportError('Please pip install pcapy (libpcap replacement)')
 
+from .libfile import extract_to_tempfile
 from .libproto import IpPacket
 
 if sys.version_info.major < 3:
@@ -87,31 +89,7 @@ class PcapReader(object):
                     timestamp = timestamp[0] + timestamp[1] * 0.000001
 
             except TypeError:
-                # In the past, python-libpcap did not clean up its fds. In
-                # 0.6.4-1 it does though and the following is a no-op.
-                self.pcap = None
-
-                # Are we done?
-                if not self.filenames:
-                    raise StopIteration()
-
-                # Do we need a new file?
-                try:
-                    self.pcap = pcap.pcapObject
-                except AttributeError:
-                    # pcapy
-                    self.filename = self.filenames.pop(0)
-                    self.pcap = pcap.open_offline(self.filename)
-                else:
-                    # pylibpcap
-                    self.pcap = pcap.pcapObject()
-                    self.filename = self.filenames.pop(0)
-                    self.pcap.open_offline(self.filename)
-
-                if self.pcap_filter:
-                    self.pcap.setfilter(self.pcap_filter, 0, 0)
-                # set link type, needed below
-                self.link_type = self.pcap.datalink()
+                self._open_next_file()
             else:
                 break
 
@@ -119,6 +97,40 @@ class PcapReader(object):
         data = tobytes(data)
 
         return data, timestamp
+
+    def _open_next_file(self):
+        # In the past, python-libpcap did not clean up its fds. In
+        # 0.6.4-1 it does though and the following is a no-op.
+        self.pcap = None
+
+        # Are we done?
+        if not self.filenames:
+            raise StopIteration()
+
+        # Next file!
+        self.filename = self.filenames.pop(0)
+        # There is no pcap_fopen_offline(3pcap) call, so we'll
+        # have to use a temp-file if the file was zipped.
+        filename, is_tempfile = extract_to_tempfile(self.filename)
+
+        try:
+            self.pcap = pcap.pcapObject
+        except AttributeError:
+            # pcapy
+            self.pcap = pcap.open_offline(filename)
+        else:
+            # pylibpcap
+            self.pcap = pcap.pcapObject()
+            self.pcap.open_offline(filename)
+
+        if is_tempfile:
+            os.unlink(filename)
+
+        if self.pcap_filter:
+            self.pcap.setfilter(self.pcap_filter, 0, 0)
+
+        # Set link type, needed below
+        self.link_type = self.pcap.datalink()
 
     def _get_frame_payload(self, data):
         # Get frame payload (pcap-linktype(7))
