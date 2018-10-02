@@ -3,7 +3,7 @@ sipzamine (previously sipcaparseye)
 
 Command line SIP dialog matching and searching through offline PCAPs.
 
-|pypi_version| |pypi_downloads|
+|pypi_version|
 
 
 
@@ -111,7 +111,4 @@ How do I get ``pcap`` files?
 .. _tcpdump247: https://github.com/ossobv/vcutil/blob/master/tcpdump247
 
 .. |pypi_version| image:: https://img.shields.io/pypi/v/sipzamine.svg
-    :target: https://pypi.python.org/pypi/sipzamine
-
-.. |pypi_downloads| image:: https://img.shields.io/pypi/dm/sipzamine.svg
     :target: https://pypi.python.org/pypi/sipzamine
