@@ -2,6 +2,8 @@
 # sipzamine SIP Protocol lib
 # Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
 
+import sys
+
 from collections import defaultdict
 
 from .libproto import IpPacket
@@ -13,15 +15,18 @@ class SipPacket(IpPacket):
         # TODO: up the probability if one of more of the ports are 5060
         if packet.data:
             word = packet.data.split(b' ', 1)[0]
-            if word in (b'INVITE', b'ACK', b'BYE', b'CANCEL', b'NOTIFY', 'OPTIONS',
-                        b'PUBLISH', b'REFER', b'REGISTER', b'SUBSCRIBE', b'UPDATE',
-                        b'INFO', b'SIP/2.0'):  # XXX: not exhaustive..
+            if word in (
+                    b'INVITE', b'ACK', b'BYE', b'CANCEL', b'NOTIFY',
+                    b'OPTIONS', b'PUBLISH', b'REFER', b'REGISTER',
+                    b'SUBSCRIBE', b'UPDATE', b'INFO', b'SIP/2.0'):
+                    # XXX: not exhaustive..
                 return 0.8
         return 0.0
 
     # Aliases: f:From, t:To, v:Via, s:Subject, l:Content-Length
     def __init__(self, datetime, ip_proto, from_, to, data):
-        super(SipPacket, self).__init__(datetime, ip_proto, from_, to, data)
+        super(SipPacket, self).__init__(
+            datetime, ip_proto, from_, to, data)
         # FIXME: split up data in header and data
         try:
             data = data.decode('utf-8')  # should be valid utf-8

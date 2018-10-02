@@ -7,11 +7,10 @@ with open('README.rst') as file:
 
 setup(
     name='sipzamine',
-    version='0.2.dev0',  # 0.2_dev
-    scripts=['src/sipzamine', 'src/sipcaparseye'],
-    package_dir={'sipzamine': 'src'},
+    version='0.3.dev',  # 0.3_dev
+    entry_points={'console_scripts': ['sipzamine = sipzamine.cli:main']},
     packages=['sipzamine'],
-    data_files=[('', ['LICENSE.txt', 'README.rst'])],
+    data_files=[('share/doc/sipzamine', ['LICENSE.txt', 'README.rst'])],
     description='SIP dialog examine utility (formerly sipcaparseye)',
     long_description=long_description,
     author='Walter Doekes, OSSO B.V.',

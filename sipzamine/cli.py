@@ -1,0 +1,231 @@
+# vim: set ts=8 sw=4 sts=4 et ai tw=79:
+# sipzamine main (SIP Examine)
+# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+
+from datetime import datetime, timedelta
+from time import mktime, strptime
+import re
+import sys
+
+from . import sipzamine
+from .argparse14191 import ArgumentParser14191
+from .libdata import PcapReader
+from .libprotosip import SipDialogs
+
+# Matches dialogs and times and looks for certain info.
+__author__ = 'Walter Doekes'
+__copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015,2018'
+__licence__ = 'GPLv3+'
+__version__ = '0.2'
+
+
+class epochtime_without_date(object):
+    """
+    Magic float that ignores the date so time-only comparisons can be
+    done.  Take care to ensure that in datetime comparisons, this object
+    is on the LHS, so these overloaded __cmp__ operator can do its job.
+
+    NOTE: We calculate the delta between daylight saving time in the initial
+    value and the compared value ONLY ONCE.  This will produce crazy results
+    around DST changes.  Also, around hour 00:00 we cannot guarantee any
+    meaningful result either.  This is a quick hack that works in 95% of the
+    cases.
+    """
+    def __init__(self, floatval):
+        sys.stderr.write(
+            '(warning: partial date parsing is inaccurate! use only if '
+            'you know understand the limitations)\n')
+        self.floatval = floatval
+        self.dstdelta = None
+
+    def __float__(self):
+        return self.floatval
+
+    def __cmp__(self, other):
+        otherval = float(other)
+
+        if self.dstdelta is None:
+            self.dstdelta = (
+                (datetime.fromtimestamp(otherval) -
+                 datetime.utcfromtimestamp(otherval)).seconds -
+                (datetime.fromtimestamp(self.floatval) -
+                 datetime.utcfromtimestamp(self.floatval)).seconds
+            )
+
+        selfval = self.floatval % 86400.0
+        otherval = (otherval + self.dstdelta) % 86400.0
+        return cmp(selfval, otherval)
+
+
+def my_regex(regexstring):
+    try:
+        return re.compile(regexstring)
+    except Exception:
+        raise ValueError()
+
+
+def my_strptime(timestring):
+    for style, prefix in (
+            ('%Y-%m-%d %H:%M:%S', ''),
+            ('%Y-%m-%d %H:%M', ''),
+            ('%Y-%m-%d', ''),
+            ('%Y-%m-%d %H:%M:%S', '2000-01-01 '),
+            ('%Y-%m-%d %H:%M', '2000-01-01 ')):
+        try:
+            parsed = strptime(prefix + timestring, style)
+        except ValueError:
+            pass
+        else:
+            ret = mktime(parsed)
+            if prefix:
+                ret = epochtime_without_date(ret)
+            break
+    else:
+        raise ValueError('Invalid time format, use YYYY-MM-DD '
+                         'HH:MM:SS or shortened')
+    return ret
+
+
+def my_timedelta(floatstring):
+    if '.' in floatstring:
+        # Add enough zeroes so the int value is large enough..
+        floatstring = '0%s000000' % (floatstring,)
+        num = [int(floatstring.split('.', 1)[0]),       # seconds
+               int(floatstring.split('.', 1)[1][0:6])]  # milliseconds
+    else:
+        num = [int(floatstring),  # seconds
+               0]                 # milliseconds
+    if sum(num) == 0:
+        raise ValueError('Specifying a zero time breaks boolean tests')
+    return timedelta(seconds=num[0], milliseconds=num[1])
+
+
+def main():
+    # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
+    #                       -p 'host 1.2.3.4' 5060.pcap.00
+    description = 'Search and examine SIP transactions/dialogs'
+    parser = ArgumentParser14191(description=description)
+
+    parser.add_argument(
+        'files', metavar='PCAP', nargs='+',
+        help='pcap files to parse')
+    parser.add_argument(
+        '--pcap', '-p', metavar='filter',
+        help='pcap filter expression')
+
+    # FIXME: remark that the searches are performed on the header lines and
+    # can be anchored as such
+    parser.add_argument(
+        '--pmatch', '-m', metavar='regex', action='append', type=my_regex,
+        help=('any packet in dialog must match regex (can be used '
+              'multiple times), e.g. ^INVITE to match calls'))
+    # FIXME: we may need to tweak the --option-name here too, and the
+    # description
+    parser.add_argument(
+        '--amatch', '-M', metavar='regex', action='append', type=my_regex,
+        help='all packets in dialog must match regex (can be used '
+             'multiple times), e.g. ^(SIP/2.0|INVITE|BYE) to match calls '
+             'without an ACK')
+    parser.add_argument(
+        '--highlight', '-H', metavar='regex', action='append', type=my_regex,
+        help=('highlight first matchgroup in packets (multiple '
+              'highlights are identified by letters a..z)'))
+
+    parser.add_argument(
+        '--dateskew', metavar='seconds', default=0, type=int,
+        help=('offset added to all dates, can be negative (use when pcap '
+              'clock was off)'))
+
+    parser.add_argument(
+        '--mindate', metavar='date', type=my_strptime,
+        help='packets must be younger than specified date')
+    parser.add_argument(
+        '--maxdate', metavar='date', type=my_strptime,
+        help='packets must be older than specified date')
+
+    parser.add_argument(
+        '--mindur', metavar='seconds', type=my_timedelta,
+        help='dialogs/transactions must be shorter than duration')
+    parser.add_argument(
+        '--maxdur', metavar='seconds', type=my_timedelta,
+        help='dialogs/transactions must be longer than duration')
+
+    parser.add_argument(
+        '--retransmits', metavar='count', default=0, type=int,
+        help='at least count retransmits must be involved')
+
+    parser.add_argument(
+        '--contents', action='store_true', default=False,
+        help='show complete packet contents')
+
+    args = parser.parse_args()
+
+    # Update the search dates according to the date skew
+    if args.dateskew:
+        args.dateskew = timedelta(seconds=args.dateskew)
+        if args.mindate:
+            args.mindate += args.dateskew
+        if args.maxdate:
+            args.maxdate += args.dateskew
+
+    # Create a packet reader
+    reader = PcapReader(args.files, pcap_filter=args.pcap,
+                        min_date=args.mindate, max_date=args.maxdate)
+
+    # Optionally add a date skew on the packets
+    if args.dateskew:
+        reader = sipzamine.dateskew_filter(reader, skew=args.dateskew)
+
+    # Convert the packets isipzamine.nto SIP dialogs
+    reader = SipDialogs(reader)
+
+    # Optionally add duration and search filters (try to put the light weight
+    # ones first)
+    if args.mindur:
+        reader = sipzamine.minduration_filter(
+            reader, min_duration=args.mindur)
+    if args.maxdur:
+        reader = sipzamine.maxduration_filter(
+            reader, max_duration=args.maxdur)
+    if args.amatch:
+        for amatch in args.amatch:
+            reader = sipzamine.allheaders_filter(reader, header_match=amatch)
+    if args.pmatch:
+        for pmatch in args.pmatch:
+            reader = sipzamine.anyheader_filter(reader, header_match=pmatch)
+    if args.retransmits:
+        reader = sipzamine.retransmits_filter(reader, count=args.retransmits)
+
+    # Call main with our pimped reader
+    sipzamine.main(
+        reader, packet_highlights=args.highlight, show_contents=args.contents)
+
+
+if __name__ == '__main__':
+    main()
+
+# Example usage:
+#
+# $ sipzamine -m 'sip:\+315' -H '^BYE' --pcap 'host banana' \
+#                stored.pcap
+# (or)
+# $ /usr/sbin/tcpdump -nnvs0 -r stored.pcap host banana |
+#       sipzamine -m 'sip:\+315' -H '^BYE' -
+#
+# Example output:
+#
+# [ 179978155f707e3622c0886752336210@22.22.22.22 ]
+# 2011-11-23 22:27:20.746782 apple:5060 > banana:5060 102 INVITE
+# 2011-11-23 22:27:20.747508 banana:5060 > apple:5060 102 INVITE(100)
+# 2011-11-23 22:27:20.783424 banana:5060 > apple:5060 102 INVITE(200)
+# 2011-11-23 22:27:20.783956 apple:5060 > banana:5060 102 ACK
+# 2011-11-23 22:27:41.665581 apple:5060 > banana:5060 103 BYE <--
+# 2011-11-23 22:27:41.665721 banana:5060 > apple:5060 103 BYE(200)
+#
+# [ 64e9278b4cdabb7c02f8c54f301937e7@apple ]
+# 2011-11-23 22:28:16.875647 apple:5060 > banana:5060 102 INVITE
+# 2011-11-23 22:28:16.876433 banana:5060 > apple:5060 102 INVITE(100)
+# 2011-11-23 22:28:16.901755 banana:5060 > apple:5060 102 INVITE(200)
+# 2011-11-23 22:28:16.902327 apple:5060 > banana:5060 102 ACK
+# 2011-11-23 22:28:24.363193 apple:5060 > banana:5060 103 BYE <--
+# 2011-11-23 22:28:24.363352 banana:5060 > apple:5060 103 BYE(200)
