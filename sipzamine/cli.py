@@ -18,6 +18,11 @@ __copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015,2018'
 __licence__ = 'GPLv3+'
 __version__ = '0.2'
 
+try:
+    cmp
+except NameError:
+    cmp = None  # FIXME: python3
+
 
 class epochtime_without_date(object):
     """
@@ -100,7 +105,7 @@ def my_timedelta(floatstring):
     return timedelta(seconds=num[0], milliseconds=num[1])
 
 
-def main():
+def parse_args():
     # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
     description = 'Search and examine SIP transactions/dialogs'
@@ -158,9 +163,13 @@ def main():
         '--contents', action='store_true', default=False,
         help='show complete packet contents')
 
-    args = parser.parse_args()
+    return parser.parse_args()
 
-    # Update the search dates according to the date skew
+
+def adjust_times(args):
+    """
+    Update the search dates according to the date skew
+    """
     if args.dateskew:
         args.dateskew = timedelta(seconds=args.dateskew)
         if args.mindate:
@@ -168,37 +177,59 @@ def main():
         if args.maxdate:
             args.maxdate += args.dateskew
 
+
+def add_dialog_filters(sipdialogs, args):
+    """
+    Optionally add duration and search filters (try to put the light
+    weight ones first)
+    """
+    if args.mindur:
+        sipdialogs = sipzamine.minduration_filter(
+            sipdialogs, min_duration=args.mindur)
+
+    if args.maxdur:
+        sipdialogs = sipzamine.maxduration_filter(
+            sipdialogs, max_duration=args.maxdur)
+
+    if args.amatch:
+        for amatch in args.amatch:
+            sipdialogs = sipzamine.allheaders_filter(
+                    sipdialogs, header_match=amatch)
+    if args.pmatch:
+        for pmatch in args.pmatch:
+            sipdialogs = sipzamine.anyheader_filter(
+                sipdialogs, header_match=pmatch)
+
+    if args.retransmits:
+        sipdialogs = sipzamine.retransmits_filter(
+            sipdialogs, count=args.retransmits)
+
+    return sipdialogs
+
+
+def main():
+    args = parse_args()
+    adjust_times(args)
+
     # Create a packet reader
-    reader = PcapReader(args.files, pcap_filter=args.pcap,
-                        min_date=args.mindate, max_date=args.maxdate)
+    reader = PcapReader(
+        args.files, pcap_filter=args.pcap,
+        min_date=args.mindate, max_date=args.maxdate)
 
     # Optionally add a date skew on the packets
     if args.dateskew:
         reader = sipzamine.dateskew_filter(reader, skew=args.dateskew)
 
-    # Convert the packets isipzamine.nto SIP dialogs
+    # Convert the packets into SIP dialogs
     reader = SipDialogs(reader)
 
-    # Optionally add duration and search filters (try to put the light weight
-    # ones first)
-    if args.mindur:
-        reader = sipzamine.minduration_filter(
-            reader, min_duration=args.mindur)
-    if args.maxdur:
-        reader = sipzamine.maxduration_filter(
-            reader, max_duration=args.maxdur)
-    if args.amatch:
-        for amatch in args.amatch:
-            reader = sipzamine.allheaders_filter(reader, header_match=amatch)
-    if args.pmatch:
-        for pmatch in args.pmatch:
-            reader = sipzamine.anyheader_filter(reader, header_match=pmatch)
-    if args.retransmits:
-        reader = sipzamine.retransmits_filter(reader, count=args.retransmits)
+    # Add filters
+    reader = add_dialog_filters(reader, args)
 
     # Call main with our pimped reader
     sipzamine.main(
-        reader, packet_highlights=args.highlight, show_contents=args.contents)
+        reader, packet_highlights=args.highlight,
+        show_contents=args.contents)
 
 
 if __name__ == '__main__':

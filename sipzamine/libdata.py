@@ -84,12 +84,8 @@ class PcapReader(object):
                         timestamp = timestamp[0] + timestamp[1] * 0.000001
 
                 except TypeError:
-                    # Unfortunately, the python-libpcap library does not
-                    # close any fd's. Looks like pcap_close() is never
-                    # called (and calling _pcap.delete_pcapObject(...)
-                    # ourselves does not help).
-                    # This means that we have to rely on the OS for FD
-                    # cleanup when finishing :(
+                    # In the past, python-libpcap did not clean up its fds. In
+                    # 0.6.4-1 it does though and the following is a no-op.
                     self.pcap = None
 
                     # Are we done?
