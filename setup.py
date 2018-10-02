@@ -10,7 +10,8 @@ setup(
     version='0.3.dev',  # 0.3_dev
     entry_points={'console_scripts': ['sipzamine = sipzamine.cli:main']},
     packages=['sipzamine'],
-    data_files=[('share/doc/sipzamine', ['LICENSE.txt', 'README.rst'])],
+    data_files=[('share/doc/sipzamine', [
+        'LICENSE.txt', 'README.rst', 'sipzamine/argparse-LICENSE.txt'])],
     description='SIP dialog examine utility (formerly sipcaparseye)',
     long_description=long_description,
     author='Walter Doekes, OSSO B.V.',
