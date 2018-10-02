@@ -109,7 +109,7 @@ def parse_args():
     # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
     description = 'Search and examine SIP transactions/dialogs'
-    parser = ArgumentParser14191(description=description)
+    parser = ArgumentParser14191(prog='sipzamine', description=description)
 
     parser.add_argument(
         'files', metavar='PCAP', nargs='+',

@@ -25,6 +25,10 @@ else:
     tobytes = (lambda x: x)
 
 
+class Skipping(BaseException):
+    pass
+
+
 class PcapReader(object):
     '''
     Reads a pcap file.
@@ -62,143 +66,164 @@ class PcapReader(object):
     def __iter__(self):
         return self
 
+    def _get_next_packet(self):
+        while True:
+            # Re-open a new file until we have a packet
+            try:
+                # Fetch the next entry or raise TypeError:
+                # "'NoneType' object is not iterable"
+                next_packet = self.pcap.next()
+
+                if len(next_packet) == 3:
+                    # pylibpcap
+                    (pktlen, data, timestamp) = next_packet
+                else:
+                    # pcapy
+                    (pkthdr, data) = next_packet
+                    # pcapy returns (None, '') for the last packet
+                    if pkthdr is None:
+                        raise TypeError('EOF')
+                    timestamp = pkthdr.getts()
+                    timestamp = timestamp[0] + timestamp[1] * 0.000001
+
+            except TypeError:
+                # In the past, python-libpcap did not clean up its fds. In
+                # 0.6.4-1 it does though and the following is a no-op.
+                self.pcap = None
+
+                # Are we done?
+                if not self.filenames:
+                    raise StopIteration()
+
+                # Do we need a new file?
+                try:
+                    self.pcap = pcap.pcapObject
+                except AttributeError:
+                    # pcapy
+                    self.filename = self.filenames.pop(0)
+                    self.pcap = pcap.open_offline(self.filename)
+                else:
+                    # pylibpcap
+                    self.pcap = pcap.pcapObject()
+                    self.filename = self.filenames.pop(0)
+                    self.pcap.open_offline(self.filename)
+
+                if self.pcap_filter:
+                    self.pcap.setfilter(self.pcap_filter, 0, 0)
+                # set link type, needed below
+                self.link_type = self.pcap.datalink()
+            else:
+                break
+
+        # On python2, convert to list-of-integers.
+        data = tobytes(data)
+
+        return data, timestamp
+
+    def _get_frame_payload(self, data):
+        # Get frame payload (pcap-linktype(7))
+        # http://www.tcpdump.org/linktypes.html
+        if self.link_type == pcap.DLT_RAW:  # Don't know??
+            payload = data
+        elif self.link_type == pcap.DLT_EN10MB:  # 0x1 Ethernet
+            # to_mac = data[0:6]
+            # from_mac = data[6:12]
+            payload = data[12:]
+        elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SSL
+            # packet_type = data[0:2]
+            # arphdr_type = data[2:4]
+            # lladdr_len = data[4:6] # =6 for mac
+            # lladdr = data[6:14] # first 6 bytes for macaddr
+            payload = data[14:]
+        else:
+            raise NotImplementedError(
+                'Not implemented link type %d (0x%x) in %s' %
+                (self.link_type, self.link_type, self.filename))
+
+        return payload
+
+    def _get_ethernet_data(self, payload):
+        # Get ethernet data
+        # http://en.wikipedia.org/wiki/EtherType
+        data = None
+        while True:
+            if self.link_type == pcap.DLT_RAW:
+                data = payload
+                break
+            elif payload[0:2] == b'\x08\x00':    # IPv4
+                data = payload[2:]
+                break
+            elif payload[0:2] == b'\x81\x00':    # 802.1Q
+                # tci = payload[2:2]  # pcp+cfi+vid
+                payload = payload[4:]
+                continue
+            elif payload[0:2] == b'\x88\xa8':    # 802.1ad (Q-in-Q)
+                raise NotImplementedError('VLAN-tagged ethernet frame '
+                                          'decoding not implemented yet.')
+            elif payload[0:2] == b'\x91\x00':    # 802.1QinQ (non-standard)
+                raise NotImplementedError('VLAN-tagged ethernet frame '
+                                          'decoding not implemented yet.')
+            elif payload[0:2] == b'\x86\xdd':    # IPv6
+                break  # ignore
+            else:                                # Other stuff (like ARP)
+                break  # ignore
+
+        if data is None:
+            raise Skipping()
+
+        return data
+
+    def _decode_ipv4(self, data, timestamp):
+        version = data[0] >> 4
+        header_len = (data[0] & 0x0f) << 2
+        if version != 4:
+            raise ValueError('How did you get a version %d in an IPv4 '
+                             'header?' % (version,))
+
+        flags = data[6] >> 5
+        fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
+        if flags & 2:
+            msg = ('(packet defragmentation on t %f not implemented yet, '
+                   'suppressing warning)')
+            self.warn_once('more_fragments', msg % (timestamp,))
+            # but, carry on
+        if fragment_offset:
+            msg = '(skipping IP fragment on t %f, suppressing warning)'
+            self.warn_once('fragment', msg % (timestamp,))
+            raise Skipping()
+
+        try:
+            proto_num = data[9]
+            ip_proto = self.protocols[proto_num]
+        except KeyError:
+            msg = ('(skipping unknown IP protocol %d on t %f, suppressing '
+                   'warning)' % (proto_num, timestamp))
+            self.warn_once('proto:%d' % (proto_num,), msg)
+            raise Skipping()
+
+        from_ = socket.inet_ntoa(bytes(data[12:16]))
+        to = socket.inet_ntoa(bytes(data[16:20]))
+
+        # IP => TCP/UDP/ICMP/fragment
+        body = data[header_len:]
+
+        return from_, to, ip_proto, body
+
     def __next__(self):
         while True:
-            while True:
-                # Re-open a new file until we have a packet
-                try:
-                    # Fetch the next entry or raise TypeError:
-                    # "'NoneType' object is not iterable"
-                    next_packet = self.pcap.next()
-
-                    if len(next_packet) == 3:
-                        # pylibpcap
-                        (pktlen, data, timestamp) = next_packet
-                    else:
-                        # pcapy
-                        (pkthdr, data) = next_packet
-                        # pcapy returns (None, '') for the last packet
-                        if pkthdr is None:
-                            raise TypeError('EOF')
-                        timestamp = pkthdr.getts()
-                        timestamp = timestamp[0] + timestamp[1] * 0.000001
-
-                except TypeError:
-                    # In the past, python-libpcap did not clean up its fds. In
-                    # 0.6.4-1 it does though and the following is a no-op.
-                    self.pcap = None
-
-                    # Are we done?
-                    if not self.filenames:
-                        raise StopIteration()
-
-                    # Do we need a new file?
-                    try:
-                        self.pcap = pcap.pcapObject
-                    except AttributeError:
-                        # pcapy
-                        self.filename = self.filenames.pop(0)
-                        self.pcap = pcap.open_offline(self.filename)
-                    else:
-                        # pylibpcap
-                        self.pcap = pcap.pcapObject()
-                        self.filename = self.filenames.pop(0)
-                        self.pcap.open_offline(self.filename)
-
-                    if self.pcap_filter:
-                        self.pcap.setfilter(self.pcap_filter, 0, 0)
-                    # set link type, needed below
-                    self.link_type = self.pcap.datalink()
-                else:
-                    break
-
-            # On python2, convert to list-of-integers.
-            data = tobytes(data)
-
-            if self.min_date and self.min_date > timestamp:
-                continue
-            if self.max_date and self.max_date < timestamp:
-                continue
-
-            # Get frame payload (pcap-linktype(7))
-            # http://www.tcpdump.org/linktypes.html
-            if self.link_type == pcap.DLT_RAW:  # Don't know??
-                payload = data
-            elif self.link_type == pcap.DLT_EN10MB:  # 0x1 Ethernet
-                # to_mac = data[0:6]
-                # from_mac = data[6:12]
-                payload = data[12:]
-            elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SSL
-                # packet_type = data[0:2]
-                # arphdr_type = data[2:4]
-                # lladdr_len = data[4:6] # =6 for mac
-                # lladdr = data[6:14] # first 6 bytes for macaddr
-                payload = data[14:]
-            else:
-                raise NotImplementedError(
-                    'Not implemented link type %d (0x%x) in %s' %
-                    (self.link_type, self.link_type, self.filename))
-
-            # Get ethernet data
-            # http://en.wikipedia.org/wiki/EtherType
-            data = None
-            while True:
-                if self.link_type == pcap.DLT_RAW:
-                    data = payload
-                    break
-                elif payload[0:2] == b'\x08\x00':    # IPv4
-                    data = payload[2:]
-                    break
-                elif payload[0:2] == b'\x81\x00':    # 802.1Q
-                    # tci = payload[2:2]  # pcp+cfi+vid
-                    payload = payload[4:]
-                    continue
-                elif payload[0:2] == b'\x88\xa8':    # 802.1ad (Q-in-Q)
-                    raise NotImplementedError('VLAN-tagged ethernet frame '
-                                              'decoding not implemented yet.')
-                elif payload[0:2] == b'\x91\x00':    # 802.1QinQ (non-standard)
-                    raise NotImplementedError('VLAN-tagged ethernet frame '
-                                              'decoding not implemented yet.')
-                elif payload[0:2] == b'\x86\xdd':    # IPv6
-                    break  # ignore
-                else:                                # Other stuff (like ARP)
-                    break  # ignore
-            # No relevant data? Continue to next packet
-            if data is None:
-                continue
-
-            version = data[0] >> 4
-            header_len = (data[0] & 0x0f) << 2
-            if version != 4:
-                raise ValueError('How did you get a version %d in an IPv4 '
-                                 'header?' % (version,))
-
-            flags = data[6] >> 5
-            fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
-            if flags & 2:
-                msg = ('(packet defragmentation on t %f not implemented yet, '
-                       'suppressing warning)')
-                self.warn_once('more_fragments', msg % (timestamp,))
-                # but, carry on
-            if fragment_offset:
-                msg = '(skipping IP fragment on t %f, suppressing warning)'
-                self.warn_once('fragment', msg % (timestamp,))
-                continue
-
             try:
-                proto_num = data[9]
-                ip_proto = self.protocols[proto_num]
-            except KeyError:
-                msg = ('(skipping unknown IP protocol %d on t %f, suppressing '
-                       'warning)' % (proto_num, timestamp))
-                self.warn_once('proto:%d' % (proto_num,), msg)
+                data, timestamp = self._get_next_packet()
+
+                if self.min_date and self.min_date > timestamp:
+                    continue
+                if self.max_date and self.max_date < timestamp:
+                    continue
+
+                data = self._get_frame_payload(data)
+                data = self._get_ethernet_data(data)
+                from_, to, ip_proto, data = self._decode_ipv4(data, timestamp)
+            except Skipping:
                 continue
-
-            from_ = socket.inet_ntoa(bytes(data[12:16]))
-            to = socket.inet_ntoa(bytes(data[16:20]))
-
-            # IP => TCP/UDP/ICMP/fragment
-            data = data[header_len:]
 
             if ip_proto in ('TCP', 'UDP'):
                 from_ = (from_, struct.unpack('>H', data[0:2])[0])  # add port
