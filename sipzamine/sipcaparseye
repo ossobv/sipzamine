@@ -1,3 +1,0 @@
-#!/bin/sh
-echo "(sipcaparseye is deprecated, please use sipzamine instead)" >&2
-"`dirname "$0"`/sipzamine" "$@"
