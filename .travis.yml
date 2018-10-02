@@ -1,15 +1,27 @@
 language: python
-python:
-  - "2.7"
-  - "3.5"
-  - "3.6"
-  - "3.7-dev" # 3.7 development branch
-  - "nightly" # currently points to 3.7-dev
-    
-# Optional command to install dependencies:
-# install: "pip install -r requirements.txt"
+
+matrix:
+  include:
+    - python: "2.7"
+      virtualenv:
+        system_site_packages: true
+    - python: "3.6"
+    - python: "nightly"
+
+install:
+  - |
+    if python --version 2>&1 | grep -E '^Python 2.7($|[.])'; then
+        sudo apt-get install python-libpcap
+        python -m pcap
+    fi
+  - |
+    if python --version 2>&1 | grep -E '^Python 3($|[.])'; then
+        sudo apt-get install libpcap-dev
+        pip install pcapy
+        python -c 'import pcapy'
+    fi
 
 # Command to run tests:
 script:
-  - python -m sipzamine -h | grep '^usage: sipzamine'
+  - "python -m sipzamine -h | grep '^usage: sipzamine'"
   - python -m unittest discover -v . '*_test.py'
