@@ -107,8 +107,6 @@ class SipPacket(IpPacket):
         # FIXME: if body is not in headers, then we want to check body too
         return None
 
-IpPacket.register_subtype(SipPacket)
-
 
 class SipDialog(list):
     '''
@@ -179,7 +177,8 @@ class SipDialogs(object):
         except StopIteration:
             # Time to yield everything we have
             self.yieldable = self.dialogs.values()
-            self.yieldable = sorted(self.yieldable, key=(lambda x: x[0].datetime))
+            self.yieldable = sorted(
+                self.yieldable, key=(lambda x: x[0].datetime))
             self.dialogs.clear()
             # self.input.close()
             self.input = None
@@ -222,6 +221,8 @@ class SipDialogs(object):
         # afraid you'll have to do it at the end (buffering all).
         self.yieldable.sort(key=(lambda x: x[0].datetime))
 
+
+IpPacket.register_subtype(SipPacket)
 
 # # Simple test/example
 # import datetime

@@ -7,7 +7,6 @@ import socket
 import struct
 import sys
 
-
 try:
     import pcap  # python-libpcap
 except ImportError:
