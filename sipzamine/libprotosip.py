@@ -30,9 +30,12 @@ class SipPacket(IpPacket):
         # FIXME: split up data in header and data
         try:
             data = data.decode('utf-8')  # should be valid utf-8
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as err:
+            where = (
+                b'...' + data[max(0, err.start - 20):err.start] +
+                b'<here->' + data[err.start:(err.start + 20)] + b'...')
+            sys.stderr.write('(utf-8 decode error near {!r})\n'.format(where))
             data = data.decode('utf-8', 'replace')
-            sys.stderr.write('(utf-8 decode error in %r)\n'.format(data))
         self.headers = data.split('\n')
 
     @property
