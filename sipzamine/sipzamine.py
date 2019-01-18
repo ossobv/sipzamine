@@ -95,11 +95,11 @@ def print_dialog(dialog, packet_highlights=None, show_contents=False):
                     highlights.append('%s %s' %
                                       (arrow, found_here.groups()[0]))
 
-        print('%s %s:%d > %s:%d %s %s %s' % (
+        print(('%s %s:%d > %s:%d %s %s %s' % (
             packet.datetime, packet.from_[0], packet.from_[1],
             packet.to[0], packet.to[1],
             packet.cseq[0], packet.method_and_status, ' '.join(highlights)
-        ))
+        )).rstrip())
 
         if show_contents:
             print(data_munge.sub('  ', packet.data))
