@@ -16,10 +16,11 @@ class SipPacket(IpPacket):
         if packet.data:
             word = packet.data.split(b' ', 1)[0]
             if word in (
-                    b'INVITE', b'ACK', b'BYE', b'CANCEL', b'NOTIFY',
+                    # XXX: not an exhaustive list..
+                    b'INVITE', b'ACK', b'BYE', b'CANCEL',
+                    b'MESSAGE', b'NOTIFY',
                     b'OPTIONS', b'PUBLISH', b'REFER', b'REGISTER',
                     b'SUBSCRIBE', b'UPDATE', b'INFO', b'SIP/2.0'):
-                    # XXX: not exhaustive..
                 return 0.8
         return 0.0
 
