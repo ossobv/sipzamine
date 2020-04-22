@@ -7,4 +7,4 @@
 __author__ = 'Walter Doekes'
 __copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015,2018-2020'
 __licence__ = 'GPLv3+'
-__version__ = '0.5'
+__version__ = '0.5.post0'

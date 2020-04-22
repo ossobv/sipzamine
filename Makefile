@@ -64,7 +64,7 @@ _run:
 version:
 	ver=$$(python -c 'import sipzamine; print sipzamine.__version__') && \
 	git=$$(git describe) && \
-	gitv=$$(echo "$$git" | sed -e 's/^v//;s/-.*/_dev/') && \
+	gitv=$$(echo "$$git" | sed -e 's/^v//;s/-.*/.post0/') && \
 	setup=$$(sed -e "/version='/"'!d'";s/.*='\([^']*\)'.*/\1/" setup.py) \
 	  && echo "ver = $$ver, setup = $$setup, git = $$gitv ($$git)" && \
 	test $$ver = $$setup && \

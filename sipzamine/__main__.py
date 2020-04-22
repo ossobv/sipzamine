@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine main (SIP Examine)
-# Copyright (C) 2011-2015,2020 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018,2020 Walter Doekes, OSSO B.V.
 from __future__ import print_function, unicode_literals
 
 from datetime import datetime, timedelta
@@ -9,16 +9,10 @@ import codecs
 import re
 import sys
 
-from . import sipzamine
+from . import sipzamine, __version__
 from .argparse14191 import ArgumentParser14191
 from .libdata import PcapReader
 from .libprotosip import SipDialogs
-
-# Matches dialogs and times and looks for certain info.
-__author__ = 'Walter Doekes'
-__copyright__ = 'Copyright (C) Walter Doekes, OSSO B.V. 2011-2015,2018'
-__licence__ = 'GPLv3+'
-__version__ = '0.2'
 
 try:
     cmp
@@ -118,7 +112,11 @@ def parse_args():
     # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
     description = 'Search and examine SIP transactions/dialogs'
-    parser = ArgumentParser14191(prog='sipzamine', description=description)
+    parser = ArgumentParser14191(
+        prog='sipzamine', description=description)
+    parser.add_argument(
+        '--version', action='version',
+        version='%(prog)s {}'.format(__version__))
 
     parser.add_argument(
         'files', metavar='PCAP', nargs='+',
