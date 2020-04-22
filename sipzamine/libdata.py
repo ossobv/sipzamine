@@ -201,7 +201,7 @@ class PcapReader(object):
 
         flags = data[6] >> 5
         fragment_offset = struct.unpack('>H', data[6:8])[0] & 0x1fff
-        if flags & 2:
+        if flags & 4:  # &1=(reserved) &2=DF, &4=MF
             msg = ('(packet defragmentation on t %f not implemented yet, '
                    'suppressing warning)')
             self.warn_once('more_fragments', msg % (timestamp,))
