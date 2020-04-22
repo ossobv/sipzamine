@@ -1,9 +1,9 @@
 PYTHON = $(shell which python)
 SIPZAMINE = $(PYTHON) -m sipzamine
 
-.PHONY: test flake8 run23 _run
+.PHONY: test flake8 run23 _run version
 
-test: flake8 run23
+test: flake8 run23 version
 
 flake8:
 	$(shell which python2) -m flake8 sipzamine
@@ -60,4 +60,14 @@ _run:
 	  samples/sip-invites-with-utf8-and-latin1.pcap \
 	  -p 'host 127.0.1.254' 2>>"$(ERR)" | wc -l) -eq 40
 	echo '(all hits, as expected)' >>"$(OUT)"
+
+version:
+	ver=$$(python -c 'import sipzamine; print sipzamine.__version__') && \
+	git=$$(git describe) && \
+	gitv=$$(echo "$$git" | sed -e 's/^v//;s/-.*/_dev/') && \
+	setup=$$(sed -e "/version='/"'!d'";s/.*='\([^']*\)'.*/\1/" setup.py) \
+	  && echo "ver = $$ver, setup = $$setup, git = $$gitv ($$git)" && \
+	test $$ver = $$setup && \
+	test $$ver = $$gitv
+
 
