@@ -108,7 +108,7 @@ def my_timedelta(floatstring):
     return timedelta(seconds=num[0], milliseconds=num[1])
 
 
-def parse_args():
+def parse_args(args):
     # Example: sipzamine -m '^INVITE' -H 'm=audio ([0-9]+)' \
     #                       -p 'host 1.2.3.4' 5060.pcap.00
     description = 'Search and examine SIP transactions/dialogs'
@@ -171,7 +171,7 @@ def parse_args():
         '--contents', action='store_true', default=False,
         help='show complete packet contents')
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 def adjust_times(args):
@@ -214,29 +214,29 @@ def add_dialog_filters(sipdialogs, args):
     return sipdialogs
 
 
-def main():
-    args = parse_args()
-    adjust_times(args)
+def main(args):
+    opts = parse_args(args)
+    adjust_times(opts)
 
     # Create a packet reader
     reader = PcapReader(
-        args.files, pcap_filter=args.pcap,
-        min_date=args.mindate, max_date=args.maxdate)
+        opts.files, pcap_filter=opts.pcap,
+        min_date=opts.mindate, max_date=opts.maxdate)
 
     # Optionally add a date skew on the packets
-    if args.dateskew:
-        reader = sipzamine.dateskew_filter(reader, skew=args.dateskew)
+    if opts.dateskew:
+        reader = sipzamine.dateskew_filter(reader, skew=opts.dateskew)
 
     # Convert the packets into SIP dialogs
     reader = SipDialogs(reader)
 
     # Add filters
-    reader = add_dialog_filters(reader, args)
+    reader = add_dialog_filters(reader, opts)
 
     # Call main with our pimped reader
     sipzamine.main(
-        reader, packet_highlights=args.highlight,
-        show_contents=args.contents)
+        reader, packet_highlights=opts.highlight,
+        show_contents=opts.contents)
 
 
 if __name__ == '__main__':
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         outfd = sys.stdout  # py2
     sys.stdout = codecs.getwriter('utf-8')(outfd)
 
-    main()
+    main(sys.argv[1:])
 
 # Example usage:
 #

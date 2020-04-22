@@ -1,9 +1,9 @@
 PYTHON = $(shell which python)
 SIPZAMINE = $(PYTHON) -m sipzamine
 
-.PHONY: test flake8 run23 _run version
+.PHONY: test unittests flake8 run23 _run version
 
-test: flake8 run23 version
+test: flake8 run23 unittests version
 
 flake8:
 	$(shell which python2) -m flake8 sipzamine
@@ -60,6 +60,10 @@ _run:
 	  samples/sip-invites-with-utf8-and-latin1.pcap \
 	  -p 'host 127.0.1.254' 2>>"$(ERR)" | wc -l) -eq 40
 	echo '(all hits, as expected)' >>"$(OUT)"
+
+unittests:
+	$(shell which python2) -m unittest discover -v . '*_test.py'
+	$(shell which python3) -m unittest discover -v . '*_test.py'
 
 version:
 	ver=$$(python -c 'import sipzamine; print sipzamine.__version__') && \
