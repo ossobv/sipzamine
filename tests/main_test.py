@@ -7,7 +7,9 @@ from __future__ import unicode_literals
 from contextlib import contextmanager
 from unittest import TestCase
 from io import StringIO
+import os
 import sys
+import time
 
 from sipzamine.__main__ import main
 
@@ -42,6 +44,14 @@ class MainTestCase(TestCase):
         else:
             # in py2 it expects binstrings
             correct_string_type_args = [i.encode('ascii') for i in args]
+
+        # Set CE(S)T time everywhere. Otherwise test runners in UTC and
+        # elsewhere will come up with different output.
+        os.environ['TZ'] = 'Europe/Amsterdam'
+        # > Note: Although in many cases, changing the TZ environment
+        # > variable may affect the output of functions like localtime()
+        # > without calling tzset(), this behavior should not be relied on.
+        time.tzset()
 
         with redirect_stdout(out), redirect_stderr(err):
             try:
