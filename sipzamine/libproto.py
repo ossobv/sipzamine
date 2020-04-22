@@ -1,6 +1,7 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine Base Protocol lib
-# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2020 Walter Doekes, OSSO B.V.
+from __future__ import print_function, unicode_literals
 
 import datetime
 

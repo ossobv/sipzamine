@@ -1,6 +1,7 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine main (SIP Examine)
-# Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018-2020 Walter Doekes, OSSO B.V.
+from __future__ import print_function, unicode_literals
 
 import re
 
@@ -102,7 +103,7 @@ def print_dialog(dialog, packet_highlights=None, show_contents=False):
         )).rstrip())
 
         if show_contents:
-            print(data_munge.sub('  ', packet.data))
+            print(data_munge.sub('  ', packet.data.decode('utf-8', 'replace')))
 
     print('')
 

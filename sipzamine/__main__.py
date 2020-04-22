@@ -1,9 +1,11 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine main (SIP Examine)
-# Copyright (C) 2011-2015 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2020 Walter Doekes, OSSO B.V.
+from __future__ import print_function, unicode_literals
 
 from datetime import datetime, timedelta
 from time import mktime, strptime
+import codecs
 import re
 import sys
 
@@ -42,6 +44,8 @@ class epochtime_without_date(object):
             'you know understand the limitations)\n')
         self.floatval = floatval
         self.dstdelta = None
+        if cmp is None:
+            raise NotImplementedError('py3')
 
     def __float__(self):
         return self.floatval
@@ -233,6 +237,13 @@ def main():
 
 
 if __name__ == '__main__':
+    # All stdout is UTF-8 (unless we're writing binary).
+    try:
+        outfd = sys.stdout.detach()  # py3
+    except AttributeError:
+        outfd = sys.stdout  # py2
+    sys.stdout = codecs.getwriter('utf-8')(outfd)
+
     main()
 
 # Example usage:

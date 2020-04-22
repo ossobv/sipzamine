@@ -26,13 +26,16 @@ setup(
          'or later (GPLv3+)'),
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
         'Topic :: Communications :: Telephony',
         'Topic :: System :: Networking :: Monitoring',
     ],
     install_requires=[
-        # 'pylibpcap' || 'pcapy'
-        # The former refuses to install easily using pip, use your
+        # pylibcap refuses to install easily using pip, use your
         # OS package manager if possible.
+        # #'pylibcap ; python_version<"3"',
+        # This one should work on py2 as well though.
+        'pcapy ; python_version>="3"',
     ],
 )
 

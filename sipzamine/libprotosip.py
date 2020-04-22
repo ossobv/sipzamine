@@ -1,6 +1,7 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine SIP Protocol lib
-# Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018,2020 Walter Doekes, OSSO B.V.
+from __future__ import print_function, unicode_literals
 
 import sys
 
@@ -35,7 +36,8 @@ class SipPacket(IpPacket):
             where = (
                 b'...' + data[max(0, err.start - 20):err.start] +
                 b'<here->' + data[err.start:(err.start + 20)] + b'...')
-            sys.stderr.write('(utf-8 decode error near {!r})\n'.format(where))
+            where = repr(bytearray(where))[len('bytearray(b'):-1]
+            sys.stderr.write('(utf-8 decode error near {})\n'.format(where))
             data = data.decode('utf-8', 'replace')
         self.headers = data.split('\n')
 
@@ -161,7 +163,7 @@ class SipDialogs(object):
         # Fetch more packets
         try:
             while True:
-                packet = self.input.next()
+                packet = next(self.input)
                 if isinstance(packet, SipPacket):
                     self.dialogs[packet.callid].append(packet)
 

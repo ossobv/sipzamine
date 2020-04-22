@@ -1,6 +1,7 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine Data source lib
-# Copyright (C) 2011-2015,2018 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018,2020 Walter Doekes, OSSO B.V.
+from __future__ import print_function, unicode_literals
 
 import datetime
 import os
@@ -54,7 +55,7 @@ class PcapReader(object):
         # iterating.
         class BogoPcap():
             def next(self):
-                raise TypeError("'NoneType' object is not iterable")
+                raise EOFError()
         self.pcap = BogoPcap()
 
         self.min_date = min_date
@@ -72,11 +73,12 @@ class PcapReader(object):
         while True:
             # Re-open a new file until we have a packet
             try:
-                # Fetch the next entry or raise TypeError:
-                # "'NoneType' object is not iterable"
                 next_packet = self.pcap.next()
 
-                if len(next_packet) == 3:
+                if next_packet is None:
+                    # pylibpcap
+                    raise EOFError()
+                elif len(next_packet) == 3:
                     # pylibpcap
                     (pktlen, data, timestamp) = next_packet
                 else:
@@ -84,11 +86,11 @@ class PcapReader(object):
                     (pkthdr, data) = next_packet
                     # pcapy returns (None, '') for the last packet
                     if pkthdr is None:
-                        raise TypeError('EOF')
+                        raise EOFError()
                     timestamp = pkthdr.getts()
                     timestamp = timestamp[0] + timestamp[1] * 0.000001
 
-            except TypeError:
+            except EOFError:
                 self._open_next_file()
             else:
                 break
@@ -127,7 +129,12 @@ class PcapReader(object):
             os.unlink(filename)
 
         if self.pcap_filter:
-            self.pcap.setfilter(self.pcap_filter, 0, 0)
+            try:
+                # pcapy 0.11.4: setfilter() takes exactly 1 argument
+                self.pcap.setfilter(self.pcap_filter)
+            except TypeError:
+                # pylibpcap 0.6.4: pcapObject_setfilter()
+                self.pcap.setfilter(self.pcap_filter, 0, 0)
 
         # Set link type, needed below
         self.link_type = self.pcap.datalink()
@@ -263,7 +270,7 @@ class PcapReader(object):
 
             datetime_ = datetime.datetime.fromtimestamp(timestamp)
             return IpPacket.create(datetime_, ip_proto, from_, to, data)
-    next = __next__
+    next = __next__  # py2
 
     def warn_once(self, key, message):
         if key not in self.warnings:
