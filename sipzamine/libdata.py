@@ -233,9 +233,9 @@ class PcapReader(object):
             try:
                 data, timestamp = self._get_next_packet()
 
-                if self.min_date and self.min_date > timestamp:
+                if self.min_date and timestamp < self.min_date:
                     continue
-                if self.max_date and self.max_date < timestamp:
+                if self.max_date and timestamp >= self.max_date:  # exclusive
                     continue
 
                 data = self._get_frame_payload(data)

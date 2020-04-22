@@ -66,6 +66,10 @@ class epochtime_without_date(object):
         return cmp(selfval, otherval)
 
 
+def my_dateskew(seconds):
+    return timedelta(seconds=int(seconds))
+
+
 def my_regex(regexstring):
     try:
         return re.compile(regexstring)
@@ -90,8 +94,9 @@ def my_strptime(timestring):
                 ret = epochtime_without_date(ret)
             break
     else:
-        raise ValueError('Invalid time format, use YYYY-MM-DD '
-                         'HH:MM:SS or shortened')
+        raise ValueError(
+            'Invalid time format; use YYYY-MM-DD '
+            'HH:MM:SS or a shortened form')
     return ret
 
 
@@ -141,7 +146,8 @@ def parse_args():
               'highlights are identified by letters a..z)'))
 
     parser.add_argument(
-        '--dateskew', metavar='seconds', default=0, type=int,
+        '--dateskew', metavar='seconds',
+        default=timedelta(0), type=my_dateskew,
         help=('offset added to all dates, can be negative (use when pcap '
               'clock was off)'))
 
@@ -175,11 +181,10 @@ def adjust_times(args):
     Update the search dates according to the date skew
     """
     if args.dateskew:
-        args.dateskew = timedelta(seconds=args.dateskew)
         if args.mindate:
-            args.mindate += args.dateskew
+            args.mindate -= args.dateskew.total_seconds()
         if args.maxdate:
-            args.maxdate += args.dateskew
+            args.maxdate -= args.dateskew.total_seconds()
 
 
 def add_dialog_filters(sipdialogs, args):
