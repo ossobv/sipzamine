@@ -30,8 +30,9 @@ class FlakeTestCase(TestCase):
             raise AssertionError(
                 'flake8 check failed:\n{}\n{}\n'.format(out, err))
 
-    def test_flake8_sipzamine(self):
-        self.run_flake8('sipzamine', 79)
-
-    def test_flake8_tests(self):
-        self.run_flake8('tests', 99)
+    # def test_flake8_sipzamine(self):
+    #     self.run_flake8('sipzamine', 79)
+    # def test_flake8_tests(self):
+    #     self.run_flake8('tests', 99)
+    def test_flake8(self):
+        self.run_flake8('.', 79)

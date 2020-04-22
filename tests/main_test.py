@@ -10,6 +10,7 @@ from io import StringIO
 import os
 import sys
 import time
+import warnings
 
 from sipzamine.__main__ import main
 
@@ -55,7 +56,14 @@ class MainTestCase(TestCase):
 
         with redirect_stdout(out), redirect_stderr(err):
             try:
-                main(correct_string_type_args)
+                # Since we'll be reading *all* of the stderr output, we don't
+                # want to see any:
+                #   sipzamine/libdata.py:76: DeprecationWarning:
+                #     PY_SSIZE_T_CLEAN will be required for '#' formats
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        'ignore', category=DeprecationWarning)
+                    main(correct_string_type_args)
             except SystemExit as e:
                 exc = e
         return out.getvalue(), err.getvalue(), exc
@@ -111,28 +119,38 @@ optional arguments:
         self.assertEqual(out, '''\
 [ 1-26254@127.0.1.1 ]
 2020-04-22 09:37:44.934771 127.0.1.1:5060 > 127.0.1.254:5060 1 INVITE <-- Dááve
-2020-04-22 09:37:44.934941 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(180) <-- Dááve
-2020-04-22 09:37:44.936158 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(200) <-- Dááve
+2020-04-22 09:37:44.934941 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(180) \
+<-- Dááve
+2020-04-22 09:37:44.936158 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(200) \
+<-- Dááve
 2020-04-22 09:37:44.936408 127.0.1.1:5060 > 127.0.1.254:5060 1 ACK <-- Dááve
 2020-04-22 09:37:45.942302 127.0.1.254:5060 > 127.0.1.1:5060 2 BYE <-- Bob
 2020-04-22 09:37:45.942443 127.0.1.1:5060 > 127.0.1.254:5060 2 BYE(200) <-- Bob
 
 [ 1-26272@127.0.1.1 ]
 2020-04-22 09:38:08.846587 127.0.1.1:5060 > 127.0.1.254:5060 1 INVITE <-- D��ve
-2020-04-22 09:38:08.846826 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(180) <-- D��ve
-2020-04-22 09:38:08.848031 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(200) <-- D��ve
+2020-04-22 09:38:08.846826 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(180) \
+<-- D��ve
+2020-04-22 09:38:08.848031 127.0.1.254:5060 > 127.0.1.1:5060 1 INVITE(200) \
+<-- D��ve
 2020-04-22 09:38:08.848182 127.0.1.1:5060 > 127.0.1.254:5060 1 ACK <-- D��ve
 2020-04-22 09:38:09.854283 127.0.1.254:5060 > 127.0.1.1:5060 2 BYE <-- Bob
 2020-04-22 09:38:09.854407 127.0.1.1:5060 > 127.0.1.254:5060 2 BYE(200) <-- Bob
 
 ''')
         self.assertEqual(err, '''\
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
 ''')
 
     def test_contents(self):
@@ -314,12 +332,18 @@ optional arguments:
 
 ''')
         self.assertEqual(err, '''\
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
 ''')
 
     def test_dateskew(self):
@@ -396,10 +420,16 @@ optional arguments:
 
 ''')
         self.assertEqual(err, '''\
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
-(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" <sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...-26272-1-0\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...26272-1-13\\r\\nFrom: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
+(utf-8 decode error near '...23SIPpTag014\\r\\nTo: "D<here->\\xe1\\xe1ve" \
+<sip:service@1...')
 ''')
