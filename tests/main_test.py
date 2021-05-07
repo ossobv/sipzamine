@@ -46,6 +46,10 @@ class MainTestCase(TestCase):
             # in py2 it expects binstrings
             correct_string_type_args = [i.encode('ascii') for i in args]
 
+        # Limit column size so the --help output stays the same whatever your
+        # terminal size.
+        os.environ['COLUMNS'] = '80'
+
         # Set CE(S)T time everywhere. Otherwise test runners in UTC and
         # elsewhere will come up with different output.
         os.environ['TZ'] = 'Europe/Amsterdam'
