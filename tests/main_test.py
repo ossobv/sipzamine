@@ -76,6 +76,8 @@ class MainTestCase(TestCase):
         out, err, exc = self.run_main(['--help'])
         self.assertEqual(type(exc), SystemExit)
         self.assertEqual(exc.args, (0,))
+        # In python nightly (3.10+) it's called options.
+        out = out.replace('\noptional arguments:', '\noptions:')
         self.assertEqual(out, '''\
 usage: sipzamine [-h] [--version] [--pcap filter] [--pmatch regex]
                  [--amatch regex] [--highlight regex] [--dateskew seconds]
@@ -88,7 +90,7 @@ Search and examine SIP transactions/dialogs
 positional arguments:
   PCAP                  pcap files to parse
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   --pcap filter, -p filter
