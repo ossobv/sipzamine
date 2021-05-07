@@ -18,6 +18,11 @@ except ImportError:
         if sys.version_info.major < 3:
             raise ImportError('Please apt install python-libpcap (pylibpcap)')
         raise ImportError('Please pip install pcapy (libpcap replacement)')
+    else:
+        PcapError = pcap.PcapError
+else:
+    class PcapError(ValueError):
+        pass
 
 from .libfile import extract_to_tempfile
 from .libproto import IpPacket
@@ -48,7 +53,26 @@ class PcapReader(object):
             raise ImportError('PcapReader requires pylibpcap support '
                               '(python-libpcap)')
 
-        self.filenames = filenames
+        self.warnings = set()  # store what we've have warned about
+
+        # Add only valid (non-duplicate) filenames.
+        self.filenames = []
+        self.exit_error = 0
+        for filename in filenames:
+            if filename in self.filenames:
+                msg = 'skipping duplicate filename %r' % (filename,)
+                self.warn_once(msg, msg)
+            else:
+                try:
+                    with open(filename, 'rb'):
+                        pass
+                except Exception:
+                    msg = 'skipping unreadable file %r (error=1)' % (filename,)
+                    self.warn_once(msg, msg)
+                    self.exit_error = 1  # error at the end anyway
+                else:
+                    self.filenames.append(filename)
+
         self.pcap_filter = pcap_filter
 
         # This way we'll only need to watch out for a single exception when
@@ -63,8 +87,6 @@ class PcapReader(object):
 
         self.filename = None
         self.link_type = None
-
-        self.warnings = set()  # store what we've have warned about
 
     def __iter__(self):
         return self
@@ -90,6 +112,11 @@ class PcapReader(object):
                     timestamp = pkthdr.getts()
                     timestamp = timestamp[0] + timestamp[1] * 0.000001
 
+            except PcapError as e:
+                msg = '%s: %s' % (self.filename, e)
+                self.warn_once(msg, msg)
+                self._open_next_file()
+                self.exit_error = 1
             except EOFError:
                 self._open_next_file()
             else:
@@ -118,7 +145,7 @@ class PcapReader(object):
         try:
             self.pcap = pcap.pcapObject
         except AttributeError:
-            # pcapy
+            # pcapy (raises pcapy.PcapError on read error)
             self.pcap = pcap.open_offline(filename)
         else:
             # pylibpcap

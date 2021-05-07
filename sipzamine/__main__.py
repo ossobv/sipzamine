@@ -219,7 +219,7 @@ def main(args):
     adjust_times(opts)
 
     # Create a packet reader
-    reader = PcapReader(
+    base_reader = reader = PcapReader(
         opts.files, pcap_filter=opts.pcap,
         min_date=opts.mindate, max_date=opts.maxdate)
 
@@ -237,6 +237,9 @@ def main(args):
     sipzamine.main(
         reader, packet_highlights=opts.highlight,
         show_contents=opts.contents)
+
+    if base_reader.exit_error:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
