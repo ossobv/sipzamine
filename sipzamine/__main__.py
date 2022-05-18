@@ -214,7 +214,7 @@ def add_dialog_filters(sipdialogs, args):
     return sipdialogs
 
 
-def main(args):
+def app_main(args):
     opts = parse_args(args)
     adjust_times(opts)
 
@@ -241,8 +241,10 @@ def main(args):
     if base_reader.exit_error:
         sys.exit(1)
 
+    return 0
 
-if __name__ == '__main__':
+
+def main():
     # All stdout is UTF-8 (unless we're writing binary).
     try:
         outfd = sys.stdout.detach()  # py3
@@ -250,7 +252,11 @@ if __name__ == '__main__':
         outfd = sys.stdout  # py2
     sys.stdout = codecs.getwriter('utf-8')(outfd)
 
-    main(sys.argv[1:])
+    return app_main(sys.argv[1:])
+
+
+if __name__ == '__main__':
+    sys.exit(main())
 
 # Example usage:
 #

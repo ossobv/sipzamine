@@ -12,7 +12,7 @@ import sys
 import time
 import warnings
 
-from sipzamine.__main__ import main
+from sipzamine.__main__ import app_main
 
 
 @contextmanager
@@ -67,7 +67,7 @@ class MainTestCase(TestCase):
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
                         'ignore', category=DeprecationWarning)
-                    main(correct_string_type_args)
+                    app_main(correct_string_type_args)
             except SystemExit as e:
                 exc = e
         return out.getvalue(), err.getvalue(), exc
