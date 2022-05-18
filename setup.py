@@ -7,7 +7,7 @@ with open('README.rst') as file:
 
 setup(
     name='sipzamine',
-    version='0.7',
+    version='0.7.post0',
     entry_points={'console_scripts': ['sipzamine = sipzamine.__main__:main']},
     packages=['sipzamine'],
     data_files=[('share/doc/sipzamine', [
