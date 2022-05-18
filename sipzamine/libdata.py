@@ -115,10 +115,10 @@ class PcapReader(object):
             except PcapError as e:
                 msg = '%s: %s' % (self.filename, e)
                 self.warn_once(msg, msg)
-                self._open_next_file()
                 self.exit_error = 1
+                self._open_next_file()  # might EOF as well
             except EOFError:
-                self._open_next_file()
+                self._open_next_file()  # might EOF as well
             else:
                 break
 
