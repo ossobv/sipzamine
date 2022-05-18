@@ -66,7 +66,7 @@ unittests:
 	$(shell which python3) -m unittest discover -v . '*_test.py'
 
 version:
-	ver=$$(python -c 'import sipzamine; print sipzamine.__version__') && \
+	ver=$$(python3 -c 'import sipzamine; print(sipzamine.__version__)') && \
 	git=$$(git describe) && \
 	gitv=$$(echo "$$git" | sed -e 's/^v//;s/-.*/.post0/') && \
 	setup=$$(sed -e "/version='/"'!d'";s/.*='\([^']*\)'.*/\1/" setup.py) \
