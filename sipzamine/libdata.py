@@ -27,6 +27,11 @@ else:
 from .libfile import extract_to_tempfile
 from .libproto import IpPacket
 
+try:
+    pcap.DLT_LINUX_SLL2
+except AttributeError:
+    pcap.DLT_LINUX_SLL2 = 276  # (0x114)
+
 if sys.version_info.major < 3:
     tobytes = bytearray  # mutable byte array, behaving like py3-bytes
 else:
@@ -171,47 +176,63 @@ class PcapReader(object):
         # http://www.tcpdump.org/linktypes.html
         if self.link_type == pcap.DLT_RAW:  # Don't know??
             payload = data
+            proto_type = b'\x08\x00'
         elif self.link_type == pcap.DLT_EN10MB:  # 0x1 Ethernet
             # to_mac = data[0:6]
             # from_mac = data[6:12]
-            payload = data[12:]
-        elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SSL
+            # (proto_type = data[12:14])
+            payload = data[14:]
+            proto_type = data[12:14]
+        elif self.link_type == pcap.DLT_LINUX_SLL:  # 0x71 Linux Cooked SLL
             # packet_type = data[0:2]
             # arphdr_type = data[2:4]
             # lladdr_len = data[4:6] # =6 for mac
             # lladdr = data[6:14] # first 6 bytes for macaddr
-            payload = data[14:]
+            # (proto_type[14:16])
+            payload = data[16:]
+            proto_type = data[14:16]
+        elif self.link_type == pcap.DLT_LINUX_SLL2:  # 0x114 Linux Cooked
+            # https://www.tcpdump.org/linktypes/LINKTYPE_LINUX_SLL2.html
+            # proto_type = data[0:2]
+            # reserved = data[2:4]
+            # iface_idx = data[4:8]
+            # arphdr_type = data[8:10]
+            # packet_type = data[10:11]
+            # lladdr_len = data[11:12] # =6 for mac
+            # lladdr = data[12:20] # first 6 bytes for macaddr
+            payload = data[20:]
+            # We expect(ed) the protocol type (ethertype) to be the
+            # first bytes before the payload. Here they are earlier.
+            proto_type = data[0:2]
         else:
             raise NotImplementedError(
                 'Not implemented link type %d (0x%x) in %s' %
                 (self.link_type, self.link_type, self.filename))
 
-        return payload
+        return payload, proto_type
 
-    def _get_ethernet_data(self, payload):
+    def _get_ethernet_data(self, payload, proto_type):
         # Get ethernet data
         # http://en.wikipedia.org/wiki/EtherType
         data = None
         while True:
-            if self.link_type == pcap.DLT_RAW:
+            if proto_type == b'\x08\x00':       # IPv4
                 data = payload
                 break
-            elif payload[0:2] == b'\x08\x00':    # IPv4
-                data = payload[2:]
-                break
-            elif payload[0:2] == b'\x81\x00':    # 802.1Q
-                # tci = payload[2:2]  # pcp+cfi+vid
+            elif proto_type == b'\x81\x00':     # 802.1Q
+                # tci = payload[0:2]            # pcp+cfi+vid
+                proto_type = payload[2:4]       # next protocol
                 payload = payload[4:]
                 continue
-            elif payload[0:2] == b'\x88\xa8':    # 802.1ad (Q-in-Q)
+            elif proto_type == b'\x88\xa8':     # 802.1ad (Q-in-Q)
                 raise NotImplementedError('VLAN-tagged ethernet frame '
                                           'decoding not implemented yet.')
-            elif payload[0:2] == b'\x91\x00':    # 802.1QinQ (non-standard)
+            elif proto_type == b'\x91\x00':     # 802.1QinQ (non-standard)
                 raise NotImplementedError('VLAN-tagged ethernet frame '
                                           'decoding not implemented yet.')
-            elif payload[0:2] == b'\x86\xdd':    # IPv6
+            elif proto_type == b'\x86\xdd':     # IPv6
                 break  # ignore
-            else:                                # Other stuff (like ARP)
+            else:                               # Other stuff (like ARP)
                 break  # ignore
 
         if data is None:
@@ -265,8 +286,8 @@ class PcapReader(object):
                 if self.max_date and timestamp >= self.max_date:  # exclusive
                     continue
 
-                data = self._get_frame_payload(data)
-                data = self._get_ethernet_data(data)
+                data, proto_type = self._get_frame_payload(data)
+                data = self._get_ethernet_data(data, proto_type)
                 from_, to, ip_proto, data = self._decode_ipv4(data, timestamp)
             except Skipping:
                 continue
