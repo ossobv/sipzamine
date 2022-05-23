@@ -208,8 +208,11 @@ class SipDialogs(object):
                     yield_it = True
 
                 elif (not v.is_established() and v[-1].method == 'ACK' and
-                      v[-2].code >= 300):
+                      v[-2].code and v[-2].code >= 300):
                     # An INVITE dialog that failed and was ACKed.
+                    # (Shady check. Must check v[-2] for None here, because a
+                    # double ACK would cause an error here. Better check would
+                    # be if we searched backwards to the latest response.)
                     yield_it = True
 
                 elif (v.is_established() and v[-1].method == 'BYE' and
