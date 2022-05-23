@@ -1,6 +1,6 @@
 # vim: set ts=8 sw=4 sts=4 et ai tw=79:
 # sipzamine main (SIP Examine)
-# Copyright (C) 2011-2015,2018,2020 Walter Doekes, OSSO B.V.
+# Copyright (C) 2011-2015,2018,2020-2022 Walter Doekes, OSSO B.V.
 from __future__ import print_function, unicode_literals
 
 from datetime import datetime, timedelta
@@ -13,11 +13,6 @@ from . import sipzamine, __version__
 from .argparse14191 import ArgumentParser14191
 from .libdata import PcapReader
 from .libprotosip import SipDialogs
-
-try:
-    cmp
-except NameError:
-    cmp = None  # FIXME: python3
 
 
 class epochtime_without_date(object):
@@ -38,11 +33,27 @@ class epochtime_without_date(object):
             'you know understand the limitations)\n')
         self.floatval = floatval
         self.dstdelta = None
-        if cmp is None:
-            raise NotImplementedError('py3')
 
     def __float__(self):
         return self.floatval
+
+    def __eq__(self, other):
+        return (self.__cmp__(other) == 0)
+
+    def __ne__(self, other):
+        return (self.__cmp__(other) != 0)
+
+    def __le__(self, other):
+        return (self.__cmp__(other) <= 0)
+
+    def __lt__(self, other):
+        return (self.__cmp__(other) < 0)
+
+    def __ge__(self, other):
+        return (self.__cmp__(other) >= 0)
+
+    def __gt__(self, other):
+        return (self.__cmp__(other) > 0)
 
     def __cmp__(self, other):
         otherval = float(other)
@@ -57,7 +68,12 @@ class epochtime_without_date(object):
 
         selfval = self.floatval % 86400.0
         otherval = (otherval + self.dstdelta) % 86400.0
-        return cmp(selfval, otherval)
+
+        if selfval < otherval:
+            return -1
+        if selfval > otherval:
+            return 1
+        return 0
 
 
 def my_dateskew(seconds):
