@@ -35,7 +35,7 @@ setup(
         # OS package manager if possible.
         # #'pylibcap ; python_version<"3"',
         # This one should work on py2 as well though.
-        'pcapy ; python_version>="3"',
+        'pcapy-ng ; python_version>="3"',
     ],
 )
 
