@@ -17,7 +17,7 @@ install:
   - |
     if python --version 2>&1 | grep -E '^Python 3($|[.])'; then
         sudo apt-get install libpcap-dev
-        pip install pcapy
+        pip install pcapy-ng
         python -c 'import pcapy'
     fi
 
